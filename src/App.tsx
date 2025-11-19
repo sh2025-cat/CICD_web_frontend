@@ -1,14 +1,20 @@
+import { BrowserRouter as Router, Routes, Route } from 'react-router-dom';
+import { Toaster } from 'sonner';
+import HomePage from './pages/HomePage';
+import RepoDetailPage from './pages/RepoDetailPage';
+import DeploymentFlowPage from './pages/DeploymentFlowPage';
+
 function App() {
   return (
-    <div className="min-h-screen bg-background text-foreground">
-      <div className="container mx-auto p-8">
-        <h1 className="text-4xl font-bold mb-4">Welcome to Your App</h1>
-        <p className="text-muted-foreground">
-          Ready to add your V0 components here!
-        </p>
-      </div>
-    </div>
-  )
+    <Router>
+      <Routes>
+        <Route path="/" element={<HomePage />} />
+        <Route path="/repo/:type" element={<RepoDetailPage />} />
+        <Route path="/deploy/:deploymentId" element={<DeploymentFlowPage />} />
+      </Routes>
+      <Toaster />
+    </Router>
+  );
 }
 
-export default App
+export default App;
