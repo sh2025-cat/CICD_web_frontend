@@ -24,23 +24,12 @@ env:
 jobs:
   build:
     runs-on: ubuntu-latest
-    environment: production 
+    environment: production
     outputs:
       image_tag: ${{ steps.build-image.outputs.image_tag }}
     steps:
       - name: Checkout code
         uses: actions/checkout@v4
-      
-      - name: Set up Node
-        uses: actions/setup-node@v4
-        with:
-          node-version: '20'
-
-      - name: Install dependencies
-        run: npm install  
-          
-      - name: Build React app
-        run: npm run build
 
       - name: Configure AWS credentials
         uses: aws-actions/configure-aws-credentials@v4
