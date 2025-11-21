@@ -63,6 +63,43 @@ src/
 └── types/        # 타입 정의
 ```
 
+## CI/CD 파이프라인
+
+GitHub Actions를 통해 자동 배포가 구성되어 있습니다.
+
+### 트리거
+- `main` 브랜치 push
+- 수동 실행 (workflow_dispatch)
+
+### 파이프라인 단계
+
+```
+1. Checkout Code
+2. AWS 인증 (ECR, ECS)
+3. Docker 이미지 빌드 (멀티스테이지)
+4. ECR 푸시 (태그: SHA, latest)
+5. ECS Task Definition 업데이트
+6. ECS 서비스 롤링 배포
+7. 배포 완료 대기 (services-stable)
+```
+
+### 인프라 구성
+
+| 리소스 | 값 |
+|--------|-----|
+| AWS 리전 | ap-northeast-2 |
+| ECR 리포지토리 | cat-frontend |
+| ECS 클러스터 | cat-cluster |
+| ECS 서비스 | cat-frontend |
+| 배포 방식 | 롤링 업데이트 (무중단) |
+
+### 필요한 GitHub Secrets
+
+| Secret | 설명 |
+|--------|------|
+| `AWS_ACCESS_KEY` | AWS Access Key ID |
+| `AWS_SECRET_KEY` | AWS Secret Access Key |
+
 ## 라이선스
 
 MIT
