@@ -9,7 +9,7 @@ function App() {
     <Router>
       <Routes>
         <Route path="/" element={<HomePage />} />
-        <Route path="/repo/:type" element={<RepoDetailPage />} />
+        <Route path="/repo/:id" element={<RepoDetailPage />} />
         <Route path="/deploy/:deploymentId" element={<DeploymentFlowPage />} />
       </Routes>
       <Toaster />

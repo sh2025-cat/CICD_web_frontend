@@ -8,27 +8,20 @@ import { mockRepositories, mockVersions, mockDeploymentHistory, createNewDeploym
 
 export default function RepoDetailPage() {
   const params = useParams();
-  const type = params.type as string;
+  const id = Number(params.id);
   const navigate = useNavigate();
 
-  const repo = mockRepositories.find(r => r.type === type);
-  const versions = mockVersions[type] || [];
-  const deploymentHistory = mockDeploymentHistory[type] || [];
+  const repo = mockRepositories.find(r => r.id === id);
+  const versions = mockVersions[id] || [];
+  const deploymentHistory = mockDeploymentHistory[id] || [];
 
   if (!repo) {
     return <div>리포지토리를 찾을 수 없습니다</div>;
   }
 
   const handleDeploy = (version: Version) => {
-    const deploymentId = createNewDeployment(type, version);
+    const deploymentId = createNewDeployment(id, version);
     navigate(`/deploy/${deploymentId}`);
-  };
-
-  const getStatusBadge = (status: string) => {
-    if (status === 'SUCCESS') return <Badge className="bg-green-500 hover:bg-green-600">성공</Badge>;
-    if (status === 'FAILED') return <Badge className="bg-red-500 hover:bg-red-600">실패</Badge>;
-    if (status === 'RUNNING') return <Badge className="bg-blue-500 hover:bg-blue-600">진행중</Badge>;
-    return <Badge variant="outline">대기</Badge>;
   };
 
   return (
@@ -64,42 +57,33 @@ export default function RepoDetailPage() {
               <div>
                 <CardTitle className="text-3xl">{repo.name}</CardTitle>
                 <CardDescription className="mt-2">
-                  {type === 'frontend' ? '프론트엔드' : '백엔드'} 리포지토리
+                  리포지토리
                 </CardDescription>
               </div>
             </div>
           </CardHeader>
           <CardContent>
-            <div className="grid grid-cols-2 md:grid-cols-4 gap-4">
+            <div className="grid grid-cols-2 md:grid-cols-3 gap-4">
               <div>
                 <p className="text-sm text-muted-foreground mb-1">최근 배포 일시</p>
-                <p className="font-medium">{repo.lastDeployment.date}</p>
+                <p className="font-medium">{repo.deployed_at}</p>
               </div>
               <div>
-                <p className="text-sm text-muted-foreground mb-1">현재 라이브 환경</p>
-                <Badge variant="outline">{repo.currentEnvironment}</Badge>
+                <p className="text-sm text-muted-foreground mb-1">현재 버전</p>
+                <Badge variant="outline" className="font-mono text-xs">
+                  {repo.tag}
+                </Badge>
               </div>
               <div>
-                <p className="text-sm text-muted-foreground mb-1">현재 라이브 버전</p>
-                <div className="flex items-center gap-2">
-                  {repo.currentVersion.tag && (
-                    <Badge variant="outline" className="font-mono text-xs h-5">
-                      {repo.currentVersion.tag}
-                    </Badge>
-                  )}
-                  <code className="text-xs bg-muted px-2 py-1 rounded">
-                    {repo.currentVersion.commitSha}
-                  </code>
-                </div>
-              </div>
-              <div>
-                <p className="text-sm text-muted-foreground mb-1">마지막 CI 상태</p>
-                {getStatusBadge(repo.lastCIStatus)}
+                <p className="text-sm text-muted-foreground mb-1">커밋 해시</p>
+                <code className="text-xs bg-muted px-2 py-1 rounded">
+                  {repo.commit_hash}
+                </code>
               </div>
             </div>
             <div className="mt-4 pt-4 border-t">
               <p className="text-sm text-muted-foreground">커밋 메시지</p>
-              <p className="mt-1">{repo.currentVersion.message}</p>
+              <p className="mt-1">{repo.commit_msg}</p>
             </div>
           </CardContent>
         </Card>
