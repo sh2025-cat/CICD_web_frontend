@@ -21,7 +21,6 @@ env:
   ECR_REPOSITORY: cat-frontend
   ECS_CLUSTER: cat-cluster
   ECS_SERVICE: cat-frontend
-  IMAGE_TAG: ${{ github.sha }}
 
 jobs:
   build:
@@ -52,7 +51,7 @@ jobs:
         run: |
           IMAGE_TAG="${{ github.event.inputs.image_tag }}"
           if [ -z "$IMAGE_TAG" ]; then
-            IMAGE_TAG="${GITHUB_SHA}"
+            IMAGE_TAG="${GITHUB_SHA::7}"
           fi
           echo "IMAGE_TAG=$IMAGE_TAG" >> $GITHUB_ENV
 
