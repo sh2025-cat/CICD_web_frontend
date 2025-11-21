@@ -46,13 +46,13 @@ export default function HomePage() {
             </header>
 
             {/* Main Content */}
-            <main className="container mx-auto py-8 px-4 md:px-6">
-                <div className="mb-8">
+            <main className="container mx-auto py-8 px-4">
+                <div className="mb-8 max-w-3xl mx-auto">
                     <h2 className="text-3xl font-bold mb-2">Dashboard</h2>
                     <p className="text-muted-foreground">배포할 리포지토리를 선택하세요</p>
                 </div>
 
-                <div className="grid gap-6 md:grid-cols-2 lg:grid-cols-2 max-w-4xl mx-auto">
+                <div className="grid gap-4 md:grid-cols-2 max-w-3xl mx-auto">
                     {repositories.map((repo) => (
                         <Link key={repo.id} to={`/repo/${repo.id}`}>
                             <Card className="hover:shadow-lg transition-shadow cursor-pointer h-full">
