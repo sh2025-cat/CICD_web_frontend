@@ -15,7 +15,7 @@ permissions:
 
 env:
   AWS_REGION: ap-northeast-2
-  ECR_REPOSITORY: cat-demo-frontend
+  ECR_REPOSITORY: cat-frontend
   IMAGE_TAG: ${{ github.sha }}
 
 jobs:
