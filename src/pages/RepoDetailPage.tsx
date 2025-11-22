@@ -55,7 +55,7 @@ export default function RepoDetailPage() {
 
     const handleDeploy = (deployment: DeploymentListItem) => {
         const deploymentId = createNewDeployment(id, deployment);
-        navigate(`/deploy/${deploymentId}`, { state: { repo } });
+        navigate(`/deploy/${deploymentId}?lastStep=${deployment.lastStep}`, { state: { repo } });
     };
 
     return (

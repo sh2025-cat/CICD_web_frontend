@@ -5,7 +5,7 @@ import { Badge } from '@/components/ui/badge';
 import { Button } from '@/components/ui/button';
 import { ArrowLeft, CheckCircle2, XCircle, Loader2, Lock, ChevronRight } from 'lucide-react';
 import { mockDeployments, mockDeploymentFlowData, type Deployment, type CIStatus, type DeploymentFlowData, type Repository } from '@/lib/mock-data';
-import { TreeVisualization, getTreeStageFromDeployment } from '@/components/tree-visualization';
+import { TreeVisualization } from '@/components/tree-visualization';
 import { toast } from 'sonner';
 import { streamDeploymentLogs, getDeploymentFlow, updateDeploymentStep } from '@/services/deployment.service';
 
@@ -16,8 +16,8 @@ export default function DeploymentFlowPage() {
     const [searchParams] = useSearchParams();
     const location = useLocation();
 
-    // 이전 페이지에서 전달받은 리포지토리 데이터
-    const repo = (location.state as { repo?: Repository })?.repo || null;
+    // 이전 페이지에서 전달받은 리포지토리 데이터 (나중에 사용 가능)
+    const _repo = (location.state as { repo?: Repository })?.repo || null;
 
     // 숫자 ID면 새로운 mockDeploymentFlowData 사용, 문자열이면 기존 mockDeployments 사용
     const isNumericId = !isNaN(Number(deploymentId));
@@ -137,6 +137,10 @@ export default function DeploymentFlowPage() {
 
     useEffect(() => {
         if (deployment) {
+            // query parameter로 lastStep이 지정된 경우 자동 업데이트 하지 않음
+            const lastStepParam = searchParams.get('lastStep');
+            if (lastStepParam) return;
+
             const stages = [
                 { key: 'test', status: deployment.stages.test.status },
                 { key: 'security', status: deployment.stages.security.status },
@@ -156,7 +160,7 @@ export default function DeploymentFlowPage() {
                 }
             }
         }
-    }, [deployment]);
+    }, [deployment, searchParams]);
 
     // SSE 로그 스트리밍
     useEffect(() => {
@@ -215,21 +219,55 @@ export default function DeploymentFlowPage() {
         );
     }
 
+    // 현재 선택된 단계까지만 실제 status 표시, 그 이후는 LOCKED
+    const stageKeys = ['test', 'security', 'build', 'infrastructure', 'deploy', 'monitoring'];
+    const selectedIndex = stageKeys.indexOf(selectedStageKey);
+
     const stages = [
-        { key: 'test', name: '테스트', status: deployment.stages.test.status },
-        { key: 'security', name: '보안 점검', status: deployment.stages.security.status },
-        { key: 'build', name: '빌드', status: deployment.stages.build.status },
-        { key: 'infrastructure', name: '인프라 상태 확인', status: deployment.stages.infrastructure.status },
-        { key: 'deploy', name: '배포', status: deployment.stages.deploy.status },
-        { key: 'monitoring', name: '모니터링', status: deployment.stages.monitoring.status },
-    ];
+        { key: 'test', name: '테스트' },
+        { key: 'security', name: '보안 점검' },
+        { key: 'build', name: '빌드' },
+        { key: 'infrastructure', name: '인프라 상태 확인' },
+        { key: 'deploy', name: '배포' },
+        { key: 'monitoring', name: '모니터링' },
+    ].map((stage, index) => ({
+        ...stage,
+        status: (index <= selectedIndex
+            ? deployment.stages[stage.key as keyof typeof deployment.stages].status
+            : 'LOCKED') as CIStatus,
+    }));
 
     const handleNextStage = async () => {
         const currentIndex = stages.findIndex((s) => s.key === selectedStageKey);
         if (currentIndex === -1 || currentIndex === stages.length - 1) return;
 
         const nextStage = stages[currentIndex + 1];
+        const nextStageKey = nextStage.key as keyof typeof deployment.stages;
 
+        // 숫자 ID (실제 API 모드)
+        if (isNumericId) {
+            try {
+                // infrastructure -> infra로 변환
+                const stepName = nextStageKey === 'infrastructure' ? 'infra' : nextStageKey;
+
+                // API 호출: lastStep 업데이트
+                await updateDeploymentStep(numericId, stepName as any);
+
+                // 성공하면 deploymentFlowData 다시 가져오기 (실제 API에서는 업데이트된 데이터)
+                const updatedData = await getDeploymentFlow(numericId);
+                setDeploymentFlowData(updatedData);
+                setDeployment(convertToOldStructure(updatedData));
+
+                // 다음 단계로 이동
+                setSelectedStageKey(nextStageKey);
+            } catch (error) {
+                console.error('Failed to update deployment step:', error);
+                toast.error('다음 단계로 진행하는데 실패했습니다');
+            }
+            return;
+        }
+
+        // Mock 모드 (문자열 ID) - 기존 로직
         if (nextStage.status !== 'LOCKED') {
             setSelectedStageKey(nextStage.key);
             return;
@@ -247,45 +285,24 @@ export default function DeploymentFlowPage() {
             return;
         }
 
-        const nextStageKey = stages[nextIndex].key as keyof typeof deployment.stages;
-
-        // API 호출: 다음 단계 업데이트
-        if (isNumericId) {
-            try {
-                // infrastructure -> infra로 변환
-                const stepName = nextStageKey === 'infrastructure' ? 'infra' : nextStageKey;
-                await updateDeploymentStep(numericId, stepName as any);
-
-                // 성공하면 deploymentFlowData 다시 가져오기
-                const updatedData = await getDeploymentFlow(numericId);
-                setDeploymentFlowData(updatedData);
-                setDeployment(convertToOldStructure(updatedData));
-                setSelectedStageKey(nextStageKey);
-            } catch (error) {
-                console.error('Failed to update deployment step:', error);
-                toast.error('다음 단계로 진행하는데 실패했습니다');
-            }
-            return;
-        }
-
-        // Mock 모드 (문자열 ID) - 기존 로직
         const updatedDeployment = { ...deployment };
+        const targetStageKey = stages[nextIndex].key as keyof typeof deployment.stages;
 
-        if (nextStageKey === 'deploy') {
-            updatedDeployment.stages[nextStageKey].status = 'RUNNING';
-            if (!updatedDeployment.stages[nextStageKey].deployStep) {
-                updatedDeployment.stages[nextStageKey].deployStep = 'initial';
+        if (targetStageKey === 'deploy') {
+            updatedDeployment.stages[targetStageKey].status = 'RUNNING';
+            if (!updatedDeployment.stages[targetStageKey].deployStep) {
+                updatedDeployment.stages[targetStageKey].deployStep = 'initial';
             }
-        } else if (nextStageKey === 'monitoring') {
-            updatedDeployment.stages[nextStageKey].status = 'SUCCESS';
+        } else if (targetStageKey === 'monitoring') {
+            updatedDeployment.stages[targetStageKey].status = 'SUCCESS';
         } else {
-            updatedDeployment.stages[nextStageKey].status = 'SUCCESS';
+            updatedDeployment.stages[targetStageKey].status = 'SUCCESS';
         }
 
         updatedDeployment.currentStage = stages[nextIndex].name;
 
         setDeployment(updatedDeployment);
-        setSelectedStageKey(nextStageKey);
+        setSelectedStageKey(targetStageKey);
     };
 
     const handlePrevStage = () => {
@@ -750,8 +767,6 @@ export default function DeploymentFlowPage() {
         }
     };
 
-    const treeStage = getTreeStageFromDeployment(deployment);
-
     return (
         <div className="min-h-screen bg-background">
             {/* Header */}
@@ -959,7 +974,7 @@ export default function DeploymentFlowPage() {
                     {/* Tree Visualization Panel */}
                     <div>
                         <Card className="overflow-hidden">
-                            <TreeVisualization stage={treeStage} />
+                            <TreeVisualization stage={selectedStageKey as any} />
                         </Card>
                     </div>
                 </div>
