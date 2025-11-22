@@ -106,6 +106,13 @@ export interface InfrastructureDetail {
     secretKeys: string[];
 }
 
+// 모니터링 메트릭 API 응답 타입
+export interface MetricsData {
+    cpuUsage: number;
+    memoryUsage: number;
+    recordTime: string;
+}
+
 export interface Deployment {
     id: string;
     repositoryName: string;
@@ -727,6 +734,25 @@ export function createNewDeployment(repoId: number, deploymentItem: DeploymentLi
     const repo = mockRepositories.find(r => r.id === repoId);
     const repoName = repo?.name || 'unknown';
 
+    // lastStep까지만 SUCCESS로 설정
+    const stepOrder: StepName[] = ['test', 'security', 'build', 'infra', 'deploy', 'monitoring'];
+    const lastStepIndex = stepOrder.indexOf(deploymentItem.lastStep);
+
+    const steps: DeploymentFlowStep[] = [];
+    for (let i = 0; i <= lastStepIndex; i++) {
+        const stepName = stepOrder[i];
+        // infra는 steps에 추가하지 않음 (convertToOldStructure에서 무조건 SUCCESS 처리)
+        if (stepName === 'infra') continue;
+
+        steps.push({
+            name: stepName,
+            status: 'SUCCESS',
+            duration: i === 0 ? '15s' : i === 1 ? '20s' : '30s',
+            githubJobId: Math.floor(Math.random() * 100000000),
+            startedAt: deploymentItem.timings.startedAt,
+        });
+    }
+
     // 새로운 DeploymentFlowData 생성
     mockDeploymentFlowData[deploymentId] = {
         id: deploymentId,
@@ -751,29 +777,7 @@ export function createNewDeployment(repoId: number, deploymentItem: DeploymentLi
             branch: deploymentItem.commit.branch,
             authorName: deploymentItem.commit.authorName,
         },
-        steps: [
-            {
-                name: 'test',
-                status: 'SUCCESS',
-                duration: '15s',
-                githubJobId: Math.floor(Math.random() * 100000000),
-                startedAt: deploymentItem.timings.startedAt,
-            },
-            {
-                name: 'security',
-                status: 'SUCCESS',
-                duration: '20s',
-                githubJobId: Math.floor(Math.random() * 100000000),
-                startedAt: deploymentItem.timings.startedAt,
-            },
-            {
-                name: 'build',
-                status: 'SUCCESS',
-                duration: '30s',
-                githubJobId: Math.floor(Math.random() * 100000000),
-                startedAt: deploymentItem.timings.startedAt,
-            },
-        ],
+        steps,
     };
 
     // 기존 mockDeployments에도 추가 (하위 호환성)
@@ -824,6 +828,46 @@ export function createNewDeployment(repoId: number, deploymentItem: DeploymentLi
             },
         },
     };
+
+    // mockInfrastructureDetail 추가 (인프라 단계에서 필요)
+    if (!mockInfrastructureDetail[deploymentId]) {
+        mockInfrastructureDetail[deploymentId] = {
+            serviceName: `${repoName}-service`,
+            status: 'ACTIVE',
+            desiredCount: 2,
+            runningCount: 2,
+            pendingCount: 0,
+            cpu: '256',
+            memory: '512',
+            taskDefinitionArn: `arn:aws:ecs:ap-northeast-2:123456789012:task-definition/${repoName}:1`,
+            containerName: repoName,
+            image: `${repoName}:${deploymentItem.commit.shortHash}`,
+            environments: ['NODE_ENV=production', 'PORT=3000'],
+            subnets: ['subnet-0a1b2c3d4e5f6g7h8', 'subnet-1b2c3d4e5f6g7h8i9'],
+            securityGroups: ['sg-0a1b2c3d4e5f6g7h8'],
+            assignPublicIp: 'ENABLED',
+            loadBalancerTargetGroup: `arn:aws:elasticloadbalancing:ap-northeast-2:123456789012:targetgroup/${repoName}-tg/abcdef1234567890`,
+            containerPort: 3000,
+            executionRoleArn: 'arn:aws:iam::123456789012:role/ecsTaskExecutionRole',
+            taskRoleArn: 'arn:aws:iam::123456789012:role/ecsTaskRole',
+            logGroup: `/ecs/${repoName}`,
+            deploymentMaxPercent: 200,
+            deploymentMinHealthyPercent: 100,
+            capacityProviderStrategy: 'FARGATE',
+            secretKeys: ['API_KEY', 'DB_PASSWORD'],
+        };
+    }
+
+    // mockMetrics 추가 (모니터링 단계에서 필요)
+    if (!mockMetrics[deploymentId]) {
+        mockMetrics[deploymentId] = [
+            { cpuUsage: 0.15, memoryUsage: 0.42, recordTime: new Date().toISOString() },
+            { cpuUsage: 0.18, memoryUsage: 0.45, recordTime: new Date(Date.now() + 5 * 60000).toISOString() },
+            { cpuUsage: 0.16, memoryUsage: 0.43, recordTime: new Date(Date.now() + 10 * 60000).toISOString() },
+            { cpuUsage: 0.14, memoryUsage: 0.41, recordTime: new Date(Date.now() + 15 * 60000).toISOString() },
+            { cpuUsage: 0.17, memoryUsage: 0.44, recordTime: new Date(Date.now() + 20 * 60000).toISOString() },
+        ];
+    }
 
     return deploymentId;
 }
@@ -980,4 +1024,50 @@ export const mockInfrastructureDetail: Record<number, InfrastructureDetail> = {
         capacityProviderStrategy: 'FARGATE',
         secretKeys: ['DB_PASSWORD', 'JWT_SECRET'],
     },
+};
+
+// 모니터링 메트릭 Mock 데이터
+export const mockMetrics: Record<number, MetricsData[]> = {
+    105: [
+        { cpuUsage: 0.15, memoryUsage: 0.42, recordTime: '2025-11-22T10:00:00' },
+        { cpuUsage: 0.18, memoryUsage: 0.45, recordTime: '2025-11-22T10:05:00' },
+        { cpuUsage: 0.16, memoryUsage: 0.43, recordTime: '2025-11-22T10:10:00' },
+        { cpuUsage: 0.14, memoryUsage: 0.41, recordTime: '2025-11-22T10:15:00' },
+        { cpuUsage: 0.17, memoryUsage: 0.44, recordTime: '2025-11-22T10:20:00' },
+    ],
+    104: [
+        { cpuUsage: 0.22, memoryUsage: 0.38, recordTime: '2025-11-21T14:00:00' },
+        { cpuUsage: 0.24, memoryUsage: 0.40, recordTime: '2025-11-21T14:05:00' },
+        { cpuUsage: 0.21, memoryUsage: 0.37, recordTime: '2025-11-21T14:10:00' },
+        { cpuUsage: 0.23, memoryUsage: 0.39, recordTime: '2025-11-21T14:15:00' },
+        { cpuUsage: 0.20, memoryUsage: 0.36, recordTime: '2025-11-21T14:20:00' },
+    ],
+    103: [
+        { cpuUsage: 0.28, memoryUsage: 0.52, recordTime: '2025-11-20T09:00:00' },
+        { cpuUsage: 0.30, memoryUsage: 0.55, recordTime: '2025-11-20T09:05:00' },
+        { cpuUsage: 0.27, memoryUsage: 0.51, recordTime: '2025-11-20T09:10:00' },
+        { cpuUsage: 0.29, memoryUsage: 0.53, recordTime: '2025-11-20T09:15:00' },
+        { cpuUsage: 0.26, memoryUsage: 0.50, recordTime: '2025-11-20T09:20:00' },
+    ],
+    102: [
+        { cpuUsage: 0.19, memoryUsage: 0.47, recordTime: '2025-11-19T16:00:00' },
+        { cpuUsage: 0.21, memoryUsage: 0.49, recordTime: '2025-11-19T16:05:00' },
+        { cpuUsage: 0.18, memoryUsage: 0.46, recordTime: '2025-11-19T16:10:00' },
+        { cpuUsage: 0.20, memoryUsage: 0.48, recordTime: '2025-11-19T16:15:00' },
+        { cpuUsage: 0.17, memoryUsage: 0.45, recordTime: '2025-11-19T16:20:00' },
+    ],
+    201: [
+        { cpuUsage: 0.32, memoryUsage: 0.60, recordTime: '2025-11-22T11:00:00' },
+        { cpuUsage: 0.35, memoryUsage: 0.63, recordTime: '2025-11-22T11:05:00' },
+        { cpuUsage: 0.31, memoryUsage: 0.59, recordTime: '2025-11-22T11:10:00' },
+        { cpuUsage: 0.33, memoryUsage: 0.61, recordTime: '2025-11-22T11:15:00' },
+        { cpuUsage: 0.30, memoryUsage: 0.58, recordTime: '2025-11-22T11:20:00' },
+    ],
+    200: [
+        { cpuUsage: 0.25, memoryUsage: 0.54, recordTime: '2025-11-21T15:00:00' },
+        { cpuUsage: 0.27, memoryUsage: 0.56, recordTime: '2025-11-21T15:05:00' },
+        { cpuUsage: 0.24, memoryUsage: 0.53, recordTime: '2025-11-21T15:10:00' },
+        { cpuUsage: 0.26, memoryUsage: 0.55, recordTime: '2025-11-21T15:15:00' },
+        { cpuUsage: 0.23, memoryUsage: 0.52, recordTime: '2025-11-21T15:20:00' },
+    ],
 };

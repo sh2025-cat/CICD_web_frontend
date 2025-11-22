@@ -4,10 +4,10 @@ import { Card, CardContent, CardDescription, CardHeader, CardTitle } from '@/com
 import { Badge } from '@/components/ui/badge';
 import { Button } from '@/components/ui/button';
 import { ArrowLeft, CheckCircle2, XCircle, Loader2, Lock, ChevronRight } from 'lucide-react';
-import { mockDeployments, mockDeploymentFlowData, type Deployment, type CIStatus, type DeploymentFlowData, type Repository, type InfrastructureDetail } from '@/lib/mock-data';
+import { mockDeployments, mockDeploymentFlowData, type Deployment, type CIStatus, type DeploymentFlowData, type Repository, type InfrastructureDetail, type MetricsData } from '@/lib/mock-data';
 import { TreeVisualization } from '@/components/tree-visualization';
 import { toast } from 'sonner';
-import { streamDeploymentLogs, getDeploymentFlow, updateDeploymentStep, getInfrastructureDetail, startDeployment, subscribeDeploymentStatus } from '@/services/deployment.service';
+import { streamDeploymentLogs, getDeploymentFlow, updateDeploymentStep, getInfrastructureDetail, startDeployment, subscribeDeploymentStatus, getMetrics } from '@/services/deployment.service';
 
 export default function DeploymentFlowPage() {
     const params = useParams();
@@ -63,6 +63,7 @@ export default function DeploymentFlowPage() {
     const [logs, setLogs] = useState<string[]>([]);
     const [isStreaming, setIsStreaming] = useState(false);
     const [infrastructureDetail, setInfrastructureDetail] = useState<InfrastructureDetail | null>(null);
+    const [metricsData, setMetricsData] = useState<MetricsData[]>([]);
 
     // API로부터 배포 플로우 데이터 가져오기
     useEffect(() => {
@@ -178,6 +179,20 @@ export default function DeploymentFlowPage() {
         }
     }, [selectedStageKey, isNumericId, numericId]);
 
+    // 모니터링 메트릭 API 호출
+    useEffect(() => {
+        if (selectedStageKey === 'monitoring' && isNumericId) {
+            getMetrics(numericId)
+                .then((data) => {
+                    setMetricsData(data);
+                })
+                .catch((err) => {
+                    console.error('모니터링 메트릭 로드 실패:', err);
+                    toast.error('모니터링 메트릭을 불러오는데 실패했습니다');
+                });
+        }
+    }, [selectedStageKey, isNumericId, numericId]);
+
     if (!deployment) {
         return (
             <div className="min-h-screen bg-background flex items-center justify-center">
@@ -191,7 +206,7 @@ export default function DeploymentFlowPage() {
         );
     }
 
-    // 현재 선택된 단계까지만 실제 status 표시, 그 이후는 LOCKED
+    // 모든 단계의 실제 status 표시 (완료된 단계는 다른 단계로 이동해도 상태 유지)
     const stageKeys = ['test', 'security', 'build', 'infrastructure', 'deploy', 'monitoring'];
     const selectedIndex = stageKeys.indexOf(selectedStageKey);
 
@@ -202,11 +217,9 @@ export default function DeploymentFlowPage() {
         { key: 'infrastructure', name: '인프라 상태 확인' },
         { key: 'deploy', name: '배포' },
         { key: 'monitoring', name: '모니터링' },
-    ].map((stage, index) => ({
+    ].map((stage) => ({
         ...stage,
-        status: (index <= selectedIndex
-            ? deployment.stages[stage.key as keyof typeof deployment.stages].status
-            : 'LOCKED') as CIStatus,
+        status: deployment.stages[stage.key as keyof typeof deployment.stages].status as CIStatus,
     }));
 
     const handleNextStage = async () => {
@@ -225,10 +238,17 @@ export default function DeploymentFlowPage() {
                 // API 호출: lastStep 업데이트
                 await updateDeploymentStep(numericId, stepName as any);
 
-                // 성공하면 deploymentFlowData 다시 가져오기 (실제 API에서는 업데이트된 데이터)
-                const updatedData = await getDeploymentFlow(numericId);
-                setDeploymentFlowData(updatedData);
-                setDeployment(convertToOldStructure(updatedData));
+                // Mock 모드: 로컬 deploymentFlowData 사용
+                if (import.meta.env.VITE_USE_MOCK === 'true') {
+                    if (deploymentFlowData) {
+                        setDeployment(convertToOldStructure(deploymentFlowData));
+                    }
+                } else {
+                    // 실제 API 모드: 서버에서 업데이트된 데이터 가져오기
+                    const updatedData = await getDeploymentFlow(numericId);
+                    setDeploymentFlowData(updatedData);
+                    setDeployment(convertToOldStructure(updatedData));
+                }
 
                 // 다음 단계로 이동
                 setSelectedStageKey(nextStageKey);
@@ -548,21 +568,54 @@ export default function DeploymentFlowPage() {
                         const imageTag = deploymentFlowData.meta.imageTag;
                         const projectId = repo.id;
 
-                        // 1. 배포 시작 API 호출
+                        // 1. 배포 상태를 RUNNING으로 변경
+                        setDeployment((prev) => {
+                            if (!prev) return prev;
+                            return {
+                                ...prev,
+                                stages: {
+                                    ...prev.stages,
+                                    deploy: { ...prev.stages.deploy, status: 'RUNNING' },
+                                },
+                            };
+                        });
+
+                        // deploymentFlowData에 deploy step 추가/업데이트
+                        setDeploymentFlowData((prev) => {
+                            if (!prev) return prev;
+                            const deployStepIndex = prev.steps.findIndex(s => s.name === 'deploy');
+                            const updatedSteps = [...prev.steps];
+
+                            if (deployStepIndex >= 0) {
+                                updatedSteps[deployStepIndex] = { ...updatedSteps[deployStepIndex], status: 'RUNNING' };
+                            } else {
+                                updatedSteps.push({
+                                    name: 'deploy',
+                                    status: 'RUNNING',
+                                    duration: '',
+                                    githubJobId: 0,
+                                    startedAt: new Date().toISOString(),
+                                });
+                            }
+
+                            return { ...prev, steps: updatedSteps };
+                        });
+
+                        // 2. 배포 시작 API 호출
                         await startDeployment(imageTag, numericId);
                         toast.success('배포가 시작되었습니다.');
 
-                        // 2. SSE로 배포 상태 구독
+                        // 3. SSE로 배포 상태 구독
                         subscribeDeploymentStatus(
                             projectId,
                             (logLine) => {
                                 console.log('Deploy log:', logLine);
-                                // 로그를 화면에 표시할 수 있음
                             },
                             (status) => {
                                 if (status === 'SUCCESS') {
                                     toast.success('배포가 성공적으로 완료되었습니다!');
-                                    // deployment 상태 업데이트
+
+                                    // deployment state 업데이트
                                     setDeployment((prev) => {
                                         if (!prev) return prev;
                                         return {
@@ -570,11 +623,41 @@ export default function DeploymentFlowPage() {
                                             stages: {
                                                 ...prev.stages,
                                                 deploy: { ...prev.stages.deploy, status: 'SUCCESS' },
+                                                monitoring: { ...prev.stages.monitoring, status: 'SUCCESS' },
                                             },
                                         };
                                     });
+
+                                    // deploymentFlowData 업데이트
+                                    setDeploymentFlowData((prev) => {
+                                        if (!prev) return prev;
+                                        const updatedSteps = [...prev.steps];
+                                        const deployStepIndex = updatedSteps.findIndex(s => s.name === 'deploy');
+
+                                        if (deployStepIndex >= 0) {
+                                            updatedSteps[deployStepIndex] = { ...updatedSteps[deployStepIndex], status: 'SUCCESS' };
+                                        }
+
+                                        // monitoring step 추가
+                                        const monitoringStepIndex = updatedSteps.findIndex(s => s.name === 'monitoring');
+                                        if (monitoringStepIndex >= 0) {
+                                            updatedSteps[monitoringStepIndex] = { ...updatedSteps[monitoringStepIndex], status: 'SUCCESS' };
+                                        } else {
+                                            updatedSteps.push({
+                                                name: 'monitoring',
+                                                status: 'SUCCESS',
+                                                duration: '',
+                                                githubJobId: 0,
+                                                startedAt: new Date().toISOString(),
+                                            });
+                                        }
+
+                                        return { ...prev, steps: updatedSteps };
+                                    });
                                 } else {
                                     toast.error('배포가 실패했습니다.');
+
+                                    // deployment state 업데이트
                                     setDeployment((prev) => {
                                         if (!prev) return prev;
                                         return {
@@ -585,63 +668,133 @@ export default function DeploymentFlowPage() {
                                             },
                                         };
                                     });
+
+                                    // deploymentFlowData 업데이트
+                                    setDeploymentFlowData((prev) => {
+                                        if (!prev) return prev;
+                                        const updatedSteps = [...prev.steps];
+                                        const deployStepIndex = updatedSteps.findIndex(s => s.name === 'deploy');
+
+                                        if (deployStepIndex >= 0) {
+                                            updatedSteps[deployStepIndex] = { ...updatedSteps[deployStepIndex], status: 'FAILED' };
+                                        }
+
+                                        return { ...prev, steps: updatedSteps };
+                                    });
                                 }
                             }
                         );
                     } catch (error) {
                         console.error('배포 시작 실패:', error);
                         toast.error('배포 시작에 실패했습니다.');
+                        setDeployment((prev) => {
+                            if (!prev) return prev;
+                            return {
+                                ...prev,
+                                stages: {
+                                    ...prev.stages,
+                                    deploy: { ...prev.stages.deploy, status: 'LOCKED' },
+                                },
+                            };
+                        });
                     }
                 };
 
+                const deployStatus = deployment.stages.deploy.status;
+
                 return (
                     <CardContent className="space-y-4">
-                        <div className="p-4 bg-blue-50 border border-blue-200 rounded-lg">
-                            <p className="text-sm text-blue-800">
-                                배포 준비가 완료되었습니다. 배포를 시작하려면 아래 버튼을 클릭하세요.
-                            </p>
-                        </div>
-                        <Button
-                            className="w-full bg-green-500 hover:bg-green-600 text-white"
-                            onClick={handleDeployStart}
-                            disabled={deployment.stages.deploy.status === 'RUNNING'}
-                        >
-                            {deployment.stages.deploy.status === 'RUNNING' ? (
-                                <>
-                                    <Loader2 className="mr-2 h-4 w-4 animate-spin" />
-                                    배포 진행 중...
-                                </>
-                            ) : (
-                                '배포 시작'
-                            )}
-                        </Button>
+                        {/* 배포 성공 */}
+                        {deployStatus === 'SUCCESS' && (
+                            <div className="p-4 bg-green-50 border border-green-200 rounded-lg">
+                                <p className="text-sm text-green-800 font-medium">
+                                    ✅ 배포가 성공적으로 완료되었습니다!
+                                </p>
+                            </div>
+                        )}
+
+                        {/* 배포 실패 */}
+                        {deployStatus === 'FAILED' && (
+                            <div className="p-4 bg-red-50 border border-red-200 rounded-lg">
+                                <p className="text-sm text-red-800 font-medium">
+                                    ❌ 배포가 실패했습니다.
+                                </p>
+                            </div>
+                        )}
+
+                        {/* 배포 대기 또는 진행 중 */}
+                        {(deployStatus === 'LOCKED' || deployStatus === 'RUNNING') && (
+                            <>
+                                <div className="p-4 bg-blue-50 border border-blue-200 rounded-lg">
+                                    <p className="text-sm text-blue-800">
+                                        배포 준비가 완료되었습니다. 배포를 시작하려면 아래 버튼을 클릭하세요.
+                                    </p>
+                                </div>
+                                <Button
+                                    className="w-full bg-green-500 hover:bg-green-600 text-white"
+                                    onClick={handleDeployStart}
+                                    disabled={deployStatus === 'RUNNING'}
+                                >
+                                    {deployStatus === 'RUNNING' ? (
+                                        <>
+                                            <Loader2 className="mr-2 h-4 w-4 animate-spin" />
+                                            배포 진행 중...
+                                        </>
+                                    ) : (
+                                        '배포 시작'
+                                    )}
+                                </Button>
+                            </>
+                        )}
                     </CardContent>
                 );
             case 'monitoring':
+                const latestMetric = metricsData.length > 0 ? metricsData[metricsData.length - 1] : null;
+                const cpuPercentage = latestMetric ? (latestMetric.cpuUsage * 100).toFixed(1) : '0.0';
+                const memoryPercentage = latestMetric ? (latestMetric.memoryUsage * 100).toFixed(1) : '0.0';
+
                 return (
                     <CardContent className="space-y-4">
-                        <div className="grid grid-cols-2 gap-4">
-                            <div className="p-4 border rounded-lg">
-                                <p className="text-sm text-muted-foreground mb-1">CPU 사용률</p>
-                                <p className="text-2xl font-bold">24.3%</p>
-                                <p className="text-xs text-green-500 mt-1">↓ 배포 전 대비 -2.1%</p>
+                        {!latestMetric ? (
+                            <div className="p-4 bg-muted/50 rounded-lg text-center">
+                                <p className="text-sm text-muted-foreground">메트릭 데이터를 불러오는 중...</p>
                             </div>
-                            <div className="p-4 border rounded-lg">
-                                <p className="text-sm text-muted-foreground mb-1">5xx 에러</p>
-                                <p className="text-2xl font-bold">0</p>
-                                <p className="text-xs text-green-500 mt-1">✓ 정상</p>
-                            </div>
-                            <div className="p-4 border rounded-lg">
-                                <p className="text-sm text-muted-foreground mb-1">요청 수</p>
-                                <p className="text-2xl font-bold">1,234</p>
-                                <p className="text-xs text-muted-foreground mt-1">최근 5분</p>
-                            </div>
-                            <div className="p-4 border rounded-lg">
-                                <p className="text-sm text-muted-foreground mb-1">응답 시간</p>
-                                <p className="text-2xl font-bold">145ms</p>
-                                <p className="text-xs text-green-500 mt-1">↓ 배포 전 대비 -12ms</p>
-                            </div>
-                        </div>
+                        ) : (
+                            <>
+                                <div className="grid grid-cols-2 gap-4">
+                                    <div className="p-4 border rounded-lg">
+                                        <p className="text-sm text-muted-foreground mb-1">CPU 사용률</p>
+                                        <p className="text-2xl font-bold">{cpuPercentage}%</p>
+                                        <p className="text-xs text-muted-foreground mt-1">
+                                            {latestMetric.recordTime}
+                                        </p>
+                                    </div>
+                                    <div className="p-4 border rounded-lg">
+                                        <p className="text-sm text-muted-foreground mb-1">메모리 사용률</p>
+                                        <p className="text-2xl font-bold">{memoryPercentage}%</p>
+                                        <p className="text-xs text-muted-foreground mt-1">
+                                            {latestMetric.recordTime}
+                                        </p>
+                                    </div>
+                                </div>
+
+                                {/* 메트릭 히스토리 */}
+                                {metricsData.length > 1 && (
+                                    <div className="mt-4">
+                                        <p className="text-sm font-medium mb-2">최근 메트릭 이력</p>
+                                        <div className="space-y-2 max-h-48 overflow-y-auto">
+                                            {metricsData.slice().reverse().map((metric, index) => (
+                                                <div key={index} className="text-xs p-2 bg-muted/30 rounded flex justify-between">
+                                                    <span className="text-muted-foreground">{metric.recordTime}</span>
+                                                    <span>CPU: {(metric.cpuUsage * 100).toFixed(1)}%</span>
+                                                    <span>메모리: {(metric.memoryUsage * 100).toFixed(1)}%</span>
+                                                </div>
+                                            ))}
+                                        </div>
+                                    </div>
+                                )}
+                            </>
+                        )}
                     </CardContent>
                 );
             default:
@@ -843,7 +996,7 @@ export default function DeploymentFlowPage() {
                                             다음 단계
                                         </Button>
                                     </div>
-                                    {!canProceed() && (
+                                    {!canProceed() && selectedStageKey !== 'monitoring' && (
                                         <p className="text-sm text-muted-foreground text-center">
                                             이전 단계를 완료해야 다음 단계로 진행할 수 있습니다
                                         </p>

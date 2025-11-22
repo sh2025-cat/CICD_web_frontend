@@ -1,5 +1,5 @@
-import { mockDeploymentFlowData, mockInfrastructureDetail } from '@/lib/mock-data';
-import type { DeploymentFlowData, StepName, InfrastructureDetail } from '@/lib/mock-data';
+import { mockDeploymentFlowData, mockInfrastructureDetail, mockMetrics } from '@/lib/mock-data';
+import type { DeploymentFlowData, StepName, InfrastructureDetail, MetricsData } from '@/lib/mock-data';
 import apiClient from '@/api/client';
 
 /**
@@ -290,16 +290,28 @@ export function subscribeDeploymentStatus(
     projectId: number,
     onLog: (logLine: string) => void,
     onComplete: (status: 'SUCCESS' | 'FAILED') => void
-): EventSource {
+): EventSource | any {
+    // Mock 모드
+    if (import.meta.env.VITE_USE_MOCK === 'true') {
+        const timer = window.setTimeout(() => {
+            onComplete('SUCCESS'); // 5초 후 배포 완료
+        }, 5000);
+
+        return { close: () => clearTimeout(timer) };
+    }
+
+    // 실제 API 모드
     const baseUrl = import.meta.env.VITE_API_BASE_URL || 'http://localhost:8080';
     const url = `${baseUrl}/api/sse/subscribe/${projectId}`;
-
     const eventSource = new EventSource(url);
 
-    eventSource.addEventListener('log', (event: MessageEvent) => {
-        onLog(event.data);
+    // 배포 진행 중 로그 이벤트 (data 없음, 진행 중임을 나타냄)
+    eventSource.addEventListener('log', () => {
+        // 배포 진행 중임을 나타내는 heartbeat 이벤트 (data 없음)
+        console.log('배포 진행 중...');
     });
 
+    // 배포 완료 이벤트 (data: SUCCESS | FAILED)
     eventSource.addEventListener('deployment_complete', (event: MessageEvent) => {
         const status = event.data as 'SUCCESS' | 'FAILED';
         onComplete(status);
@@ -312,4 +324,26 @@ export function subscribeDeploymentStatus(
     };
 
     return eventSource;
+}
+
+/**
+ * 모니터링 메트릭 조회
+ * GET /api/metrics/{deploymentId}
+ *
+ * @param deploymentId - 배포 ID
+ * @returns 메트릭 데이터 배열
+ */
+export async function getMetrics(deploymentId: number): Promise<MetricsData[]> {
+    if (import.meta.env.VITE_USE_MOCK === 'true') {
+        const metrics = mockMetrics[deploymentId];
+        if (!metrics) {
+            throw new Error(`Metrics for deployment ${deploymentId} not found`);
+        }
+        return metrics;
+    }
+
+    const response = await apiClient.get<{ data: MetricsData[] }>(
+        `/api/metrics/${deploymentId}`
+    );
+    return response.data.data;
 }
