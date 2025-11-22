@@ -282,13 +282,11 @@ export async function startDeployment(imageTag: string, deploymentId: number): P
  * GET /api/sse/subscribe/{projectId}
  *
  * @param projectId - 프로젝트(리포지토리) ID
- * @param onLog - 로그 수신 시 콜백
  * @param onComplete - 배포 완료 시 콜백 (SUCCESS | FAILED)
  * @returns EventSource 인스턴스
  */
 export function subscribeDeploymentStatus(
     projectId: number,
-    onLog: (logLine: string) => void,
     onComplete: (status: 'SUCCESS' | 'FAILED') => void
 ): EventSource | any {
     // Mock 모드
@@ -346,4 +344,19 @@ export async function getMetrics(deploymentId: number): Promise<MetricsData[]> {
         `/api/metrics/${deploymentId}`
     );
     return response.data.data;
+}
+
+/**
+ * 배포 롤백
+ * POST /api/ecs/rollback/{deploymentId}
+ *
+ * @param deploymentId - 배포 ID
+ */
+export async function rollbackDeployment(deploymentId: number): Promise<void> {
+    if (import.meta.env.VITE_USE_MOCK === 'true') {
+        console.log(`[Mock] Rolling back deployment: ${deploymentId}`);
+        return;
+    }
+
+    await apiClient.post(`/api/ecs/rollback/${deploymentId}`);
 }

@@ -7,7 +7,7 @@ import { ArrowLeft, CheckCircle2, XCircle, Loader2, Lock, ChevronRight } from 'l
 import { mockDeployments, mockDeploymentFlowData, type Deployment, type CIStatus, type DeploymentFlowData, type Repository, type InfrastructureDetail, type MetricsData } from '@/lib/mock-data';
 import { TreeVisualization } from '@/components/tree-visualization';
 import { toast } from 'sonner';
-import { streamDeploymentLogs, getDeploymentFlow, updateDeploymentStep, getInfrastructureDetail, startDeployment, subscribeDeploymentStatus, getMetrics } from '@/services/deployment.service';
+import { streamDeploymentLogs, getDeploymentFlow, updateDeploymentStep, getInfrastructureDetail, startDeployment, subscribeDeploymentStatus, getMetrics, rollbackDeployment } from '@/services/deployment.service';
 
 export default function DeploymentFlowPage() {
     const params = useParams();
@@ -64,6 +64,7 @@ export default function DeploymentFlowPage() {
     const [isStreaming, setIsStreaming] = useState(false);
     const [infrastructureDetail, setInfrastructureDetail] = useState<InfrastructureDetail | null>(null);
     const [metricsData, setMetricsData] = useState<MetricsData[]>([]);
+    const [isRolledBack, setIsRolledBack] = useState(false);
 
     // API로부터 배포 플로우 데이터 가져오기
     useEffect(() => {
@@ -207,9 +208,6 @@ export default function DeploymentFlowPage() {
     }
 
     // 모든 단계의 실제 status 표시 (완료된 단계는 다른 단계로 이동해도 상태 유지)
-    const stageKeys = ['test', 'security', 'build', 'infrastructure', 'deploy', 'monitoring'];
-    const selectedIndex = stageKeys.indexOf(selectedStageKey);
-
     const stages = [
         { key: 'test', name: '테스트' },
         { key: 'security', name: '보안 점검' },
@@ -608,9 +606,6 @@ export default function DeploymentFlowPage() {
                         // 3. SSE로 배포 상태 구독
                         subscribeDeploymentStatus(
                             projectId,
-                            (logLine) => {
-                                console.log('Deploy log:', logLine);
-                            },
                             (status) => {
                                 if (status === 'SUCCESS') {
                                     toast.success('배포가 성공적으로 완료되었습니다!');
@@ -987,14 +982,35 @@ export default function DeploymentFlowPage() {
                                         >
                                             이전 단계
                                         </Button>
-                                        <Button
-                                            variant="default"
-                                            className="flex-1"
-                                            disabled={!canProceed()}
-                                            onClick={handleNextStage}
-                                        >
-                                            다음 단계
-                                        </Button>
+                                        {selectedStageKey === 'monitoring' ? (
+                                            <Button
+                                                variant="destructive"
+                                                className="flex-1"
+                                                disabled={isRolledBack}
+                                                onClick={async () => {
+                                                    if (!isNumericId) return;
+                                                    try {
+                                                        await rollbackDeployment(numericId);
+                                                        setIsRolledBack(true);
+                                                        toast.success('롤백이 완료되었습니다');
+                                                    } catch (error) {
+                                                        console.error('롤백 실패:', error);
+                                                        toast.error('롤백에 실패했습니다');
+                                                    }
+                                                }}
+                                            >
+                                                {isRolledBack ? '롤백 완료' : '롤백'}
+                                            </Button>
+                                        ) : (
+                                            <Button
+                                                variant="default"
+                                                className="flex-1"
+                                                disabled={!canProceed()}
+                                                onClick={handleNextStage}
+                                            >
+                                                다음 단계
+                                            </Button>
+                                        )}
                                     </div>
                                     {!canProceed() && selectedStageKey !== 'monitoring' && (
                                         <p className="text-sm text-muted-foreground text-center">
