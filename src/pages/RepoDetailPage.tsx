@@ -176,7 +176,7 @@ export default function RepoDetailPage() {
                                     {deploymentHistory.map((deployment) => (
                                         <Link
                                             key={deployment.deploymentId}
-                                            to={`/deploy/${deployment.deploymentId}`}
+                                            to={`/deploy/${deployment.deploymentId}?lastStep=${deployment.lastStep}`}
                                         >
                                             <div className="p-3 border rounded-lg hover:bg-muted/50 transition-colors cursor-pointer">
                                                 <div className="flex items-start justify-between mb-2">

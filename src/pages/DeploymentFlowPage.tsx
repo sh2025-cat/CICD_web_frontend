@@ -1,5 +1,5 @@
 import { useState, useEffect } from 'react';
-import { useParams, useNavigate, Link } from 'react-router-dom';
+import { useParams, useNavigate, Link, useSearchParams } from 'react-router-dom';
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from '@/components/ui/card';
 import { Badge } from '@/components/ui/badge';
 import { Button } from '@/components/ui/button';
@@ -13,6 +13,7 @@ export default function DeploymentFlowPage() {
     const params = useParams();
     const deploymentId = params.deploymentId as string;
     const navigate = useNavigate();
+    const [searchParams] = useSearchParams();
 
     // 숫자 ID면 새로운 mockDeploymentFlowData 사용, 문자열이면 기존 mockDeployments 사용
     const isNumericId = !isNaN(Number(deploymentId));
@@ -60,6 +61,19 @@ export default function DeploymentFlowPage() {
                     setDeploymentFlowData(data);
                     // deployment도 업데이트
                     setDeployment(convertToOldStructure(data));
+
+                    // URL query parameter의 lastStep 사용, 없으면 steps 배열의 마지막 단계 사용
+                    const lastStepParam = searchParams.get('lastStep');
+                    if (lastStepParam) {
+                        // lastStep을 stageKey로 변환 (infra -> infrastructure)
+                        const lastStageKey = lastStepParam === 'infra' ? 'infrastructure' : lastStepParam;
+                        setSelectedStageKey(lastStageKey);
+                    } else if (data.steps && data.steps.length > 0) {
+                        // query parameter 없으면 steps 배열의 마지막 단계 사용
+                        const lastStep = data.steps[data.steps.length - 1];
+                        const lastStageKey = lastStep.name === 'infra' ? 'infrastructure' : lastStep.name;
+                        setSelectedStageKey(lastStageKey);
+                    }
                 })
                 .catch((err) => {
                     console.error('배포 플로우 로드 실패:', err);

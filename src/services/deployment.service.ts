@@ -213,7 +213,7 @@ export function streamDeploymentLogs(
 
 /**
  * 배포 단계 업데이트 (다음 단계 진행)
- * POST /api/repos/deployment/{deploymentId}/step
+ * POST /api/repos/{deploymentId}/next
  *
  * @param deploymentId - 배포 ID
  * @param step - 다음 진행할 단계 이름
@@ -224,9 +224,14 @@ export async function updateDeploymentStep(
 ): Promise<void> {
     if (import.meta.env.VITE_USE_MOCK === 'true') {
         // Mock 모드에서는 실제 업데이트하지 않음
-        console.log(`[Mock] Updating deployment ${deploymentId} to step: ${step}`);
+        console.log(`[Mock] Updating deployment ${deploymentId} to next step: ${step}`);
         return;
     }
 
-    await apiClient.post(`/api/repos/deployment/${deploymentId}/step`, { step });
+    try {
+        await apiClient.post(`/api/repos/${deploymentId}/next`, { step });
+    } catch (error) {
+        console.error('Failed to update deployment step:', error);
+        throw error;
+    }
 }
