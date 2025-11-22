@@ -54,7 +54,7 @@ export default function HomePage() {
 
                 <div className="grid gap-4 md:grid-cols-2 max-w-3xl mx-auto">
                     {repositories.map((repo) => (
-                        <Link key={repo.id} to={`/repo/${repo.id}`}>
+                        <Link key={repo.id} to={`/repo/${repo.id}`} state={{ repo }}>
                             <Card className="hover:shadow-lg transition-shadow cursor-pointer h-full">
                                 <CardHeader>
                                     <div className="flex items-start justify-between">

@@ -1,19 +1,23 @@
 import { useState, useEffect } from 'react';
-import { useParams, useNavigate, Link, useSearchParams } from 'react-router-dom';
+import { useParams, useNavigate, Link, useSearchParams, useLocation } from 'react-router-dom';
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from '@/components/ui/card';
 import { Badge } from '@/components/ui/badge';
 import { Button } from '@/components/ui/button';
 import { ArrowLeft, CheckCircle2, XCircle, Loader2, Lock, ChevronRight } from 'lucide-react';
-import { mockDeployments, mockDeploymentFlowData, type Deployment, type CIStatus, type DeploymentFlowData } from '@/lib/mock-data';
+import { mockDeployments, mockDeploymentFlowData, type Deployment, type CIStatus, type DeploymentFlowData, type Repository } from '@/lib/mock-data';
 import { TreeVisualization, getTreeStageFromDeployment } from '@/components/tree-visualization';
 import { toast } from 'sonner';
-import { streamDeploymentLogs, getDeploymentFlow } from '@/services/deployment.service';
+import { streamDeploymentLogs, getDeploymentFlow, updateDeploymentStep } from '@/services/deployment.service';
 
 export default function DeploymentFlowPage() {
     const params = useParams();
     const deploymentId = params.deploymentId as string;
     const navigate = useNavigate();
     const [searchParams] = useSearchParams();
+    const location = useLocation();
+
+    // 이전 페이지에서 전달받은 리포지토리 데이터
+    const repo = (location.state as { repo?: Repository })?.repo || null;
 
     // 숫자 ID면 새로운 mockDeploymentFlowData 사용, 문자열이면 기존 mockDeployments 사용
     const isNumericId = !isNaN(Number(deploymentId));
@@ -220,7 +224,7 @@ export default function DeploymentFlowPage() {
         { key: 'monitoring', name: '모니터링', status: deployment.stages.monitoring.status },
     ];
 
-    const handleNextStage = () => {
+    const handleNextStage = async () => {
         const currentIndex = stages.findIndex((s) => s.key === selectedStageKey);
         if (currentIndex === -1 || currentIndex === stages.length - 1) return;
 
@@ -243,8 +247,29 @@ export default function DeploymentFlowPage() {
             return;
         }
 
-        const updatedDeployment = { ...deployment };
         const nextStageKey = stages[nextIndex].key as keyof typeof deployment.stages;
+
+        // API 호출: 다음 단계 업데이트
+        if (isNumericId) {
+            try {
+                // infrastructure -> infra로 변환
+                const stepName = nextStageKey === 'infrastructure' ? 'infra' : nextStageKey;
+                await updateDeploymentStep(numericId, stepName as any);
+
+                // 성공하면 deploymentFlowData 다시 가져오기
+                const updatedData = await getDeploymentFlow(numericId);
+                setDeploymentFlowData(updatedData);
+                setDeployment(convertToOldStructure(updatedData));
+                setSelectedStageKey(nextStageKey);
+            } catch (error) {
+                console.error('Failed to update deployment step:', error);
+                toast.error('다음 단계로 진행하는데 실패했습니다');
+            }
+            return;
+        }
+
+        // Mock 모드 (문자열 ID) - 기존 로직
+        const updatedDeployment = { ...deployment };
 
         if (nextStageKey === 'deploy') {
             updatedDeployment.stages[nextStageKey].status = 'RUNNING';

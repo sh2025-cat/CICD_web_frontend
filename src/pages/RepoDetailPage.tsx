@@ -1,23 +1,25 @@
 import { useEffect, useState } from 'react';
-import { useParams, useNavigate, Link } from 'react-router-dom';
+import { useParams, useNavigate, Link, useLocation } from 'react-router-dom';
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from '@/components/ui/card';
 import { Badge } from '@/components/ui/badge';
 import { Button } from '@/components/ui/button';
 import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from '@/components/ui/table';
 import { ArrowLeft } from 'lucide-react';
 import { toast } from 'sonner';
-import { mockRepositories, createNewDeployment, type DeploymentListItem } from '@/lib/mock-data';
+import { createNewDeployment, type DeploymentListItem, type Repository } from '@/lib/mock-data';
 import { getDeploymentsByRepoId } from '@/services/repository.service';
 
 export default function RepoDetailPage() {
     const params = useParams();
     const id = Number(params.id);
     const navigate = useNavigate();
+    const location = useLocation();
+
+    // 메인 페이지에서 전달받은 리포지토리 데이터
+    const repo = (location.state as { repo?: Repository })?.repo || null;
 
     const [deployments, setDeployments] = useState<DeploymentListItem[]>([]);
     const [loading, setLoading] = useState(true);
-
-    const repo = mockRepositories.find((r) => r.id === id);
 
     useEffect(() => {
         getDeploymentsByRepoId(id)
@@ -53,7 +55,7 @@ export default function RepoDetailPage() {
 
     const handleDeploy = (deployment: DeploymentListItem) => {
         const deploymentId = createNewDeployment(id, deployment);
-        navigate(`/deploy/${deploymentId}`);
+        navigate(`/deploy/${deploymentId}`, { state: { repo } });
     };
 
     return (
@@ -177,6 +179,7 @@ export default function RepoDetailPage() {
                                         <Link
                                             key={deployment.deploymentId}
                                             to={`/deploy/${deployment.deploymentId}?lastStep=${deployment.lastStep}`}
+                                            state={{ repo }}
                                         >
                                             <div className="p-3 border rounded-lg hover:bg-muted/50 transition-colors cursor-pointer">
                                                 <div className="flex items-start justify-between mb-2">
