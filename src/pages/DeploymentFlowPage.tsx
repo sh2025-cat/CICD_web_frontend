@@ -239,7 +239,43 @@ export default function DeploymentFlowPage() {
                 // Mock 모드: 로컬 deploymentFlowData 사용
                 if (import.meta.env.VITE_USE_MOCK === 'true') {
                     if (deploymentFlowData) {
-                        setDeployment(convertToOldStructure(deploymentFlowData));
+                        // 다음 단계를 deploymentFlowData에 추가
+                        setDeploymentFlowData((prev) => {
+                            if (!prev) return prev;
+                            const updatedSteps = [...prev.steps];
+                            const nextStepIndex = updatedSteps.findIndex(s => s.name === stepName);
+
+                            if (nextStepIndex >= 0) {
+                                // 이미 존재하면 SUCCESS로 업데이트
+                                updatedSteps[nextStepIndex] = {
+                                    ...updatedSteps[nextStepIndex],
+                                    status: 'SUCCESS'
+                                };
+                            } else {
+                                // 없으면 추가
+                                updatedSteps.push({
+                                    name: stepName as any,
+                                    status: 'SUCCESS',
+                                    duration: '',
+                                    githubJobId: 0,
+                                    startedAt: new Date().toISOString(),
+                                });
+                            }
+
+                            return { ...prev, steps: updatedSteps };
+                        });
+
+                        // deployment state도 업데이트
+                        setDeployment((prev) => {
+                            if (!prev) return prev;
+                            return {
+                                ...prev,
+                                stages: {
+                                    ...prev.stages,
+                                    [nextStageKey]: { ...prev.stages[nextStageKey], status: 'SUCCESS' },
+                                },
+                            };
+                        });
                     }
                 } else {
                     // 실제 API 모드: 서버에서 업데이트된 데이터 가져오기
@@ -568,7 +604,6 @@ export default function DeploymentFlowPage() {
                                             stages: {
                                                 ...prev.stages,
                                                 deploy: { ...prev.stages.deploy, status: 'SUCCESS' },
-                                                monitoring: { ...prev.stages.monitoring, status: 'SUCCESS' },
                                             },
                                         };
                                     });
@@ -581,20 +616,6 @@ export default function DeploymentFlowPage() {
 
                                         if (deployStepIndex >= 0) {
                                             updatedSteps[deployStepIndex] = { ...updatedSteps[deployStepIndex], status: 'SUCCESS' };
-                                        }
-
-                                        // monitoring step 추가
-                                        const monitoringStepIndex = updatedSteps.findIndex(s => s.name === 'monitoring');
-                                        if (monitoringStepIndex >= 0) {
-                                            updatedSteps[monitoringStepIndex] = { ...updatedSteps[monitoringStepIndex], status: 'SUCCESS' };
-                                        } else {
-                                            updatedSteps.push({
-                                                name: 'monitoring',
-                                                status: 'SUCCESS',
-                                                duration: '',
-                                                githubJobId: 0,
-                                                startedAt: new Date().toISOString(),
-                                            });
                                         }
 
                                         return { ...prev, steps: updatedSteps };
@@ -804,7 +825,9 @@ export default function DeploymentFlowPage() {
                         {stages.map((stage, index) => (
                             <div
                                 key={stage.key}
-                                className="relative flex flex-col items-center flex-1 cursor-pointer group"
+                                className={`relative flex flex-col items-center flex-1 group ${
+                                    stage.status !== 'LOCKED' ? 'cursor-pointer' : 'cursor-not-allowed opacity-60'
+                                }`}
                                 onClick={() => {
                                     if (stage.status !== 'LOCKED') {
                                         setSelectedStageKey(stage.key);
