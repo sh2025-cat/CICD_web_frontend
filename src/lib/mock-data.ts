@@ -1,8 +1,8 @@
 export type CIStatus = 'SUCCESS' | 'FAILED' | 'RUNNING' | 'LOCKED';
 export type PipelineStatus = 'SUCCESS' | 'FAILED' | 'PENDING' | 'INPROGRESS';
 export type DeploymentStatus = 'PENDING' | 'INPROGRESS' | 'SUCCESS' | 'FAILED';
-export type LastStep = 'test' | 'security' | 'build' | 'infra' | 'deploy' | 'monitoring';
-export type StepName = 'test' | 'security' | 'build' | 'infra' | 'deploy' | 'monitoring';
+export type LastStep = 'test' | 'sast' | 'build' | 'infra' | 'deploy' | 'monitoring';
+export type StepName = 'test' | 'sast' | 'build' | 'infra' | 'deploy' | 'monitoring';
 
 export interface Repository {
     id: number;
@@ -125,7 +125,7 @@ export interface Deployment {
     currentStage: string;
     stages: {
         test: DeploymentStage;
-        security: DeploymentStage;
+        sast: DeploymentStage;
         build: DeploymentStage;
         infrastructure: DeploymentStage;
         deploy: DeploymentStage;
@@ -318,7 +318,7 @@ export const mockDeploymentFlowData: Record<number, DeploymentFlowData> = {
                 startedAt: '2025-11-20T10:00:00',
             },
             {
-                name: 'security',
+                name: 'sast',
                 status: 'SUCCESS',
                 duration: '20s',
                 githubJobId: 11111112,
@@ -365,7 +365,7 @@ export const mockDeploymentFlowData: Record<number, DeploymentFlowData> = {
                 startedAt: '2025-11-20T09:00:00',
             },
             {
-                name: 'security',
+                name: 'sast',
                 status: 'SUCCESS',
                 duration: '20s',
                 githubJobId: 11111113,
@@ -412,7 +412,7 @@ export const mockDeploymentFlowData: Record<number, DeploymentFlowData> = {
                 startedAt: '2025-11-19T14:30:00',
             },
             {
-                name: 'security',
+                name: 'sast',
                 status: 'SUCCESS',
                 duration: '25s',
                 githubJobId: 11111116,
@@ -473,7 +473,7 @@ export const mockDeploymentFlowData: Record<number, DeploymentFlowData> = {
                 startedAt: '2025-11-19T11:00:00',
             },
             {
-                name: 'security',
+                name: 'sast',
                 status: 'SUCCESS',
                 duration: '18s',
                 githubJobId: 11111121,
@@ -520,7 +520,7 @@ export const mockDeploymentFlowData: Record<number, DeploymentFlowData> = {
                 startedAt: '2025-11-20T11:00:00',
             },
             {
-                name: 'security',
+                name: 'sast',
                 status: 'SUCCESS',
                 duration: '22s',
                 githubJobId: 22222222,
@@ -567,7 +567,7 @@ export const mockDeploymentFlowData: Record<number, DeploymentFlowData> = {
                 startedAt: '2025-11-19T09:15:00',
             },
             {
-                name: 'security',
+                name: 'sast',
                 status: 'SUCCESS',
                 duration: '30s',
                 githubJobId: 22222223,
@@ -611,7 +611,7 @@ export const mockDeployments: Record<string, Deployment> = {
         currentStage: '모니터링',
         stages: {
             test: { name: '테스트', status: 'SUCCESS', details: { totalTests: 150, failedTests: 0, coverage: '85%' } },
-            security: { name: '보안 점검', status: 'SUCCESS', details: { vulnerabilities: [] } },
+            sast: { name: '보안 점검', status: 'SUCCESS', details: { vulnerabilities: [] } },
             build: {
                 name: '빌드',
                 status: 'SUCCESS',
@@ -654,7 +654,7 @@ FAIL src/components/ChartComponent.test.tsx
     TypeError: Cannot read property 'length' of undefined`,
                 },
             },
-            security: { name: '보안 점검', status: 'LOCKED' },
+            sast: { name: '보안 점검', status: 'LOCKED' },
             build: { name: '빌드', status: 'LOCKED' },
             infrastructure: { name: '인프라 상태 확인', status: 'LOCKED' },
             deploy: { name: '배포', status: 'LOCKED' },
@@ -681,7 +681,7 @@ FAIL src/components/ChartComponent.test.tsx
                     coverage: '85.2%',
                 },
             },
-            security: {
+            sast: {
                 name: '보안 점검',
                 status: 'SUCCESS',
                 details: {
@@ -735,7 +735,7 @@ export function createNewDeployment(repoId: number, deploymentItem: DeploymentLi
     const repoName = repo?.name || 'unknown';
 
     // lastStep까지만 SUCCESS로 설정
-    const stepOrder: StepName[] = ['test', 'security', 'build', 'infra', 'deploy', 'monitoring'];
+    const stepOrder: StepName[] = ['test', 'sast', 'build', 'infra', 'deploy', 'monitoring'];
     const lastStepIndex = stepOrder.indexOf(deploymentItem.lastStep);
 
     const steps: DeploymentFlowStep[] = [];
@@ -801,7 +801,7 @@ export function createNewDeployment(repoId: number, deploymentItem: DeploymentLi
                     coverage: '87.5%',
                 },
             },
-            security: {
+            sast: {
                 name: '보안 점검',
                 status: 'LOCKED',
                 details: { vulnerabilities: [] },

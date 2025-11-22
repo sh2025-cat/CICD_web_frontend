@@ -38,7 +38,7 @@ export default function DeploymentFlowPage() {
             currentStage: '배포',
             stages: {
                 test: { name: '테스트', status: flowData.steps.find(s => s.name === 'test')?.status as CIStatus || 'LOCKED' },
-                security: { name: '보안 점검', status: flowData.steps.find(s => s.name === 'security')?.status as CIStatus || 'LOCKED' },
+                sast: { name: '보안 점검', status: flowData.steps.find(s => s.name === 'sast')?.status as CIStatus || 'LOCKED' },
                 build: { name: '빌드', status: flowData.steps.find(s => s.name === 'build')?.status as CIStatus || 'LOCKED' },
                 infrastructure: { name: '인프라 상태 확인', status: 'SUCCESS' }, // 인프라는 무조건 성공
                 // 배포는 steps에 deploy가 없으면 LOCKED (대기), 있으면 실제 status
@@ -103,7 +103,7 @@ export default function DeploymentFlowPage() {
 
             const stages = [
                 { key: 'test', status: deployment.stages.test.status },
-                { key: 'security', status: deployment.stages.security.status },
+                { key: 'sast', status: deployment.stages.sast.status },
                 { key: 'build', status: deployment.stages.build.status },
                 { key: 'infrastructure', status: deployment.stages.infrastructure.status },
                 { key: 'deploy', status: deployment.stages.deploy.status },
@@ -210,7 +210,7 @@ export default function DeploymentFlowPage() {
     // 모든 단계의 실제 status 표시 (완료된 단계는 다른 단계로 이동해도 상태 유지)
     const stages = [
         { key: 'test', name: '테스트' },
-        { key: 'security', name: '보안 점검' },
+        { key: 'sast', name: '보안 점검' },
         { key: 'build', name: '빌드' },
         { key: 'infrastructure', name: '인프라 상태 확인' },
         { key: 'deploy', name: '배포' },
@@ -385,58 +385,8 @@ export default function DeploymentFlowPage() {
                         )}
                     </CardContent>
                 );
-            case 'security':
-                return (
-                    <CardContent className="space-y-4">
-                        {deployment.stages.security.details?.vulnerabilities?.length > 0 && (
-                            <>
-                                <div className="p-4 bg-yellow-50 border border-yellow-200 rounded-lg">
-                                    <h4 className="font-semibold text-yellow-800 mb-3">
-                                        ⚠️ 보안 취약점이 발견되었습니다
-                                    </h4>
-                                    <div className="space-y-3">
-                                        {deployment.stages.security.details.vulnerabilities.map(
-                                            (vuln: any, i: number) => (
-                                                <div
-                                                    key={i}
-                                                    className="p-3 bg-background rounded border border-yellow-100"
-                                                >
-                                                    <div className="flex items-start justify-between mb-2">
-                                                        <h5 className="font-medium text-sm">{vuln.title}</h5>
-                                                        <Badge
-                                                            variant="secondary"
-                                                            className={
-                                                                vuln.severity === 'CRITICAL' || vuln.severity === 'HIGH'
-                                                                    ? 'bg-red-100 text-red-800 hover:bg-red-200'
-                                                                    : 'bg-yellow-100 text-yellow-800 hover:bg-yellow-200'
-                                                            }
-                                                        >
-                                                            {vuln.severity}
-                                                        </Badge>
-                                                    </div>
-                                                    <p className="text-xs text-muted-foreground mb-1">
-                                                        {vuln.file}:{vuln.line}
-                                                    </p>
-                                                    {vuln.description && <p className="text-sm">{vuln.description}</p>}
-                                                </div>
-                                            )
-                                        )}
-                                    </div>
-                                </div>
-                                <p className="text-sm text-muted-foreground">
-                                    ℹ️ 취약점이 발견되었지만 배포는 계속 진행할 수 있습니다. 가능한 빠른 시일 내에
-                                    수정하는 것을 권장합니다.
-                                </p>
-                            </>
-                        )}
-                        {(!deployment.stages.security.details?.vulnerabilities ||
-                            deployment.stages.security.details.vulnerabilities.length === 0) && (
-                            <div className="p-4 bg-green-50 border border-green-200 rounded-lg">
-                                <p className="text-sm text-green-800">✓ 보안 취약점이 발견되지 않았습니다</p>
-                            </div>
-                        )}
-                    </CardContent>
-                );
+            case 'sast':
+                return <CardContent className="space-y-4"></CardContent>;
             case 'build':
                 return (
                     <CardContent className="space-y-4">

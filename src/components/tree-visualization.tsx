@@ -2,12 +2,12 @@ import { useRef, useEffect } from 'react';
 import { cn } from '@/lib/utils';
 
 import testVideo from '@/assets/tree/test.mp4';
-import securityVideo from '@/assets/tree/security.mp4';
+import sastVideo from '@/assets/tree/sast.mp4';
 import buildVideo from '@/assets/tree/build.mp4';
 import infraVideo from '@/assets/tree/infra.mp4';
 import deployVideo from '@/assets/tree/deploy.mp4';
 
-type TreeStage = 'test' | 'security' | 'build' | 'infrastructure' | 'deploy' | 'monitoring';
+type TreeStage = 'test' | 'sast' | 'build' | 'infrastructure' | 'deploy' | 'monitoring';
 
 interface TreeVisualizationProps {
   stage: TreeStage;
@@ -26,8 +26,8 @@ const stageVideoConfig: Record<TreeStage, VideoConfig> = {
     src: testVideo,
     playbackRate: 1.5,
   },
-  security: {
-    src: securityVideo,
+  sast: {
+    src: sastVideo,
     playbackRate: 1.5,
   },
   build: {
@@ -113,7 +113,7 @@ export function getTreeStageFromDeployment(deployment: any): TreeStage {
   if (stages.deploy.status === 'SUCCESS' || stages.deploy.status === 'RUNNING') return 'deploy';
   if (stages.infrastructure.status === 'SUCCESS' || stages.infrastructure.status === 'RUNNING') return 'infrastructure';
   if (stages.build.status === 'SUCCESS' || stages.build.status === 'RUNNING') return 'build';
-  if (stages.security.status === 'SUCCESS' || stages.security.status === 'RUNNING') return 'security';
+  if (stages.sast.status === 'SUCCESS' || stages.sast.status === 'RUNNING') return 'sast';
 
   return 'test';
 }
