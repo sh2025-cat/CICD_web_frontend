@@ -4,16 +4,69 @@ import { Card, CardContent, CardDescription, CardHeader, CardTitle } from '@/com
 import { Badge } from '@/components/ui/badge';
 import { Button } from '@/components/ui/button';
 import { ArrowLeft, CheckCircle2, XCircle, Loader2, Lock, ChevronRight } from 'lucide-react';
-import { mockDeployments, type Deployment, type CIStatus } from '@/lib/mock-data';
+import { mockDeployments, mockDeploymentFlowData, type Deployment, type CIStatus, type DeploymentFlowData } from '@/lib/mock-data';
 import { TreeVisualization, getTreeStageFromDeployment } from '@/components/tree-visualization';
 import { toast } from 'sonner';
+import { streamDeploymentLogs, getDeploymentFlow } from '@/services/deployment.service';
 
 export default function DeploymentFlowPage() {
     const params = useParams();
     const deploymentId = params.deploymentId as string;
     const navigate = useNavigate();
-    const [deployment, setDeployment] = useState<Deployment | undefined>(mockDeployments[deploymentId]);
+
+    // 숫자 ID면 새로운 mockDeploymentFlowData 사용, 문자열이면 기존 mockDeployments 사용
+    const isNumericId = !isNaN(Number(deploymentId));
+    const numericId = Number(deploymentId);
+
+    // 새로운 구조를 기존 Deployment 타입으로 변환하는 임시 함수
+    const convertToOldStructure = (flowData: typeof mockDeploymentFlowData[number]): Deployment | undefined => {
+        if (!flowData) return undefined;
+
+        return {
+            id: `deploy-${flowData.id}`,
+            repositoryName: flowData.meta.project,
+            version: {
+                commitSha: flowData.commit.shortHash,
+                commitMessage: flowData.commit.message,
+            },
+            createdAt: flowData.timings.createdAt,
+            currentStage: '배포',
+            stages: {
+                test: { name: '테스트', status: flowData.steps.find(s => s.name === 'test')?.status as CIStatus || 'LOCKED' },
+                security: { name: '보안 점검', status: flowData.steps.find(s => s.name === 'security')?.status as CIStatus || 'LOCKED' },
+                build: { name: '빌드', status: flowData.steps.find(s => s.name === 'build')?.status as CIStatus || 'LOCKED' },
+                infrastructure: { name: '인프라 상태 확인', status: flowData.steps.find(s => s.name === 'infra')?.status as CIStatus || 'LOCKED' },
+                deploy: { name: '배포', status: flowData.steps.find(s => s.name === 'deploy')?.status as CIStatus || 'LOCKED' },
+                monitoring: { name: '모니터링', status: flowData.steps.find(s => s.name === 'monitoring')?.status as CIStatus || 'LOCKED' },
+            },
+        };
+    };
+
+    const [deployment, setDeployment] = useState<Deployment | undefined>(
+        isNumericId
+            ? convertToOldStructure(mockDeploymentFlowData[numericId])
+            : mockDeployments[deploymentId]
+    );
+    const [deploymentFlowData, setDeploymentFlowData] = useState<DeploymentFlowData | null>(null);
     const [selectedStageKey, setSelectedStageKey] = useState<string>('test');
+    const [logs, setLogs] = useState<string[]>([]);
+    const [isStreaming, setIsStreaming] = useState(false);
+
+    // API로부터 배포 플로우 데이터 가져오기
+    useEffect(() => {
+        if (isNumericId) {
+            getDeploymentFlow(numericId)
+                .then((data) => {
+                    setDeploymentFlowData(data);
+                    // deployment도 업데이트
+                    setDeployment(convertToOldStructure(data));
+                })
+                .catch((err) => {
+                    console.error('배포 플로우 로드 실패:', err);
+                    toast.error('배포 정보를 불러오는데 실패했습니다');
+                });
+        }
+    }, [isNumericId, numericId]);
 
     useEffect(() => {
         if (!deployment) return;
@@ -86,6 +139,50 @@ export default function DeploymentFlowPage() {
             }
         }
     }, [deployment]);
+
+    // SSE 로그 스트리밍
+    useEffect(() => {
+        if (!deploymentFlowData) {
+            console.log('[SSE] deploymentFlowData not loaded yet');
+            return;
+        }
+
+        const currentStep = deploymentFlowData.steps.find((s) => {
+            const stageKey = s.name === 'infra' ? 'infrastructure' : s.name;
+            return stageKey === selectedStageKey;
+        });
+
+        console.log(`[SSE] Selected stage: ${selectedStageKey}, Found step:`, currentStep);
+
+        if (!currentStep) {
+            console.log('[SSE] No step found for this stage, clearing logs');
+            setLogs([]);
+            setIsStreaming(false);
+            return;
+        }
+
+        // 로그 초기화 및 스트리밍 시작
+        setLogs([]);
+        setIsStreaming(true);
+
+        // SSE 스트리밍 시작
+        const eventSource = streamDeploymentLogs(
+            deploymentFlowData.id,
+            currentStep.githubJobId,
+            (logLine) => {
+                setLogs((prev) => [...prev, logLine]);
+            },
+            () => {
+                console.log(`${selectedStageKey} 로그 스트리밍 완료`);
+                setIsStreaming(false);
+            }
+        );
+
+        return () => {
+            eventSource.close();
+            setIsStreaming(false);
+        };
+    }, [deploymentFlowData, selectedStageKey]);
 
     if (!deployment) {
         return (
@@ -183,6 +280,29 @@ export default function DeploymentFlowPage() {
     };
 
     const renderStageContent = () => {
+        // SSE 로그가 실제로 있을 때만 로그 표시
+        const showSSELogs = deploymentFlowData && logs.length > 0;
+
+        if (showSSELogs) {
+            return (
+                <CardContent className="space-y-4">
+                    <div className="space-y-2">
+                        <h4 className="font-semibold text-sm flex items-center gap-2">
+                            {isStreaming && <Loader2 className="h-4 w-4 animate-spin" />}
+                            {isStreaming ? '실시간 로그' : '로그'}
+                        </h4>
+                        <div className="bg-black text-green-400 p-4 rounded-lg font-mono text-xs overflow-x-auto max-h-96 overflow-y-auto">
+                            {logs.map((line, i) => (
+                                <div key={i} className="whitespace-pre-wrap break-all">
+                                    {line}
+                                </div>
+                            ))}
+                        </div>
+                    </div>
+                </CardContent>
+            );
+        }
+
         switch (selectedStageKey) {
             case 'test':
                 return (
@@ -724,28 +844,40 @@ export default function DeploymentFlowPage() {
                                     </CardTitle>
                                     <Badge
                                         className={
-                                            deployment.stages[selectedStageKey as keyof typeof deployment.stages]
-                                                .status === 'SUCCESS'
-                                                ? 'bg-green-500 hover:bg-green-600'
-                                                : deployment.stages[selectedStageKey as keyof typeof deployment.stages]
-                                                      .status === 'FAILED'
-                                                ? 'bg-red-500 hover:bg-red-600'
-                                                : deployment.stages[selectedStageKey as keyof typeof deployment.stages]
-                                                      .status === 'RUNNING'
-                                                ? 'bg-blue-500 hover:bg-blue-600'
-                                                : 'bg-secondary text-secondary-foreground'
+                                            (() => {
+                                                // deploymentFlowData의 steps에서 status 가져오기
+                                                let status;
+                                                if (deploymentFlowData) {
+                                                    const stepName = selectedStageKey === 'infrastructure' ? 'infra' : selectedStageKey;
+                                                    const step = deploymentFlowData.steps.find(s => s.name === stepName);
+                                                    status = step?.status || deployment.stages[selectedStageKey as keyof typeof deployment.stages].status;
+                                                } else {
+                                                    status = deployment.stages[selectedStageKey as keyof typeof deployment.stages].status;
+                                                }
+
+                                                if (status === 'SUCCESS') return 'bg-green-500 hover:bg-green-600';
+                                                if (status === 'FAILED') return 'bg-red-500 hover:bg-red-600';
+                                                if (status === 'RUNNING') return 'bg-blue-500 hover:bg-blue-600';
+                                                return 'bg-secondary text-secondary-foreground';
+                                            })()
                                         }
                                     >
-                                        {deployment.stages[selectedStageKey as keyof typeof deployment.stages]
-                                            .status === 'SUCCESS'
-                                            ? '성공'
-                                            : deployment.stages[selectedStageKey as keyof typeof deployment.stages]
-                                                  .status === 'FAILED'
-                                            ? '실패'
-                                            : deployment.stages[selectedStageKey as keyof typeof deployment.stages]
-                                                  .status === 'RUNNING'
-                                            ? '진행 중'
-                                            : '대기'}
+                                        {(() => {
+                                            // deploymentFlowData의 steps에서 status 가져오기
+                                            let status;
+                                            if (deploymentFlowData) {
+                                                const stepName = selectedStageKey === 'infrastructure' ? 'infra' : selectedStageKey;
+                                                const step = deploymentFlowData.steps.find(s => s.name === stepName);
+                                                status = step?.status || deployment.stages[selectedStageKey as keyof typeof deployment.stages].status;
+                                            } else {
+                                                status = deployment.stages[selectedStageKey as keyof typeof deployment.stages].status;
+                                            }
+
+                                            if (status === 'SUCCESS') return '성공';
+                                            if (status === 'FAILED') return '실패';
+                                            if (status === 'RUNNING') return '진행 중';
+                                            return '대기';
+                                        })()}
                                     </Badge>
                                 </div>
                             </CardHeader>

@@ -1,5 +1,5 @@
-import { mockRepositories } from '@/lib/mock-data';
-import type { Repository } from '@/lib/mock-data';
+import { mockRepositories, mockDeploymentList } from '@/lib/mock-data';
+import type { Repository, DeploymentListItem } from '@/lib/mock-data';
 import apiClient from '@/api/client';
 
 export async function getRepositories(): Promise<Repository[]> {
@@ -7,6 +7,15 @@ export async function getRepositories(): Promise<Repository[]> {
         return mockRepositories;
     }
 
-    const response = await apiClient.get<{ data: Repository[] }>('/api/repositories');
+    const response = await apiClient.get<{ data: Repository[] }>('/api/repos');
+    return response.data.data;
+}
+
+export async function getDeploymentsByRepoId(projectId: number): Promise<DeploymentListItem[]> {
+    if (import.meta.env.VITE_USE_MOCK === 'true') {
+        return mockDeploymentList[projectId] || [];
+    }
+
+    const response = await apiClient.get<{ data: DeploymentListItem[] }>(`/api/repos/${projectId}/deployments`);
     return response.data.data;
 }

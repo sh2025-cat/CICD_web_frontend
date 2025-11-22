@@ -68,17 +68,17 @@ export default function HomePage() {
                                     <div className="space-y-2">
                                         <div className="flex justify-between text-sm">
                                             <span className="text-muted-foreground">최근 배포</span>
-                                            <span className="font-medium">{repo.deployed_at}</span>
+                                            <span className="font-medium">{repo.deployedAt}</span>
                                         </div>
                                         <div className="flex justify-between text-sm">
-                                            <span className="text-muted-foreground">현재 버전</span>
+                                            <span className="text-muted-foreground">커밋 해시</span>
                                             <Badge variant="outline" className="font-mono text-xs">
-                                                {repo.tag}
+                                                {repo.commitHash}
                                             </Badge>
                                         </div>
                                     </div>
                                     <div className="pt-2 border-t">
-                                        <p className="text-sm text-muted-foreground line-clamp-1">{repo.commit_msg}</p>
+                                        <p className="text-sm text-muted-foreground line-clamp-1">{repo.commitMsg}</p>
                                     </div>
                                 </CardContent>
                             </Card>
