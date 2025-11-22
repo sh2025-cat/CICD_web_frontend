@@ -65,10 +65,12 @@ export default function DeploymentFlowPage() {
     const [infrastructureDetail, setInfrastructureDetail] = useState<InfrastructureDetail | null>(null);
     const [metricsData, setMetricsData] = useState<MetricsData[]>([]);
     const [isRolledBack, setIsRolledBack] = useState(false);
+    const [loading, setLoading] = useState(true);
 
     // API로부터 배포 플로우 데이터 가져오기
     useEffect(() => {
         if (isNumericId) {
+            setLoading(true);
             getDeploymentFlow(numericId)
                 .then((data) => {
                     setDeploymentFlowData(data);
@@ -91,7 +93,12 @@ export default function DeploymentFlowPage() {
                 .catch((err) => {
                     console.error('배포 플로우 로드 실패:', err);
                     toast.error('배포 정보를 불러오는데 실패했습니다');
+                })
+                .finally(() => {
+                    setLoading(false);
                 });
+        } else {
+            setLoading(false);
         }
     }, [isNumericId, numericId]);
 
@@ -193,6 +200,14 @@ export default function DeploymentFlowPage() {
                 });
         }
     }, [selectedStageKey, isNumericId, numericId]);
+
+    if (loading) {
+        return (
+            <div className="min-h-screen bg-background flex items-center justify-center">
+                <p className="text-muted-foreground">로딩 중...</p>
+            </div>
+        );
+    }
 
     if (!deployment) {
         return (

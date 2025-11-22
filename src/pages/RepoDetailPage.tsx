@@ -7,7 +7,7 @@ import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from '@
 import { ArrowLeft } from 'lucide-react';
 import { toast } from 'sonner';
 import { createNewDeployment, type DeploymentListItem, type Repository } from '@/lib/mock-data';
-import { getDeploymentsByRepoId } from '@/services/repository.service';
+import { getDeploymentsByRepoId, getRepositoryById } from '@/services/repository.service';
 
 export default function RepoDetailPage() {
     const params = useParams();
@@ -16,29 +16,55 @@ export default function RepoDetailPage() {
     const location = useLocation();
 
     // 메인 페이지에서 전달받은 리포지토리 데이터
-    const repo = (location.state as { repo?: Repository })?.repo || null;
+    const [repo, setRepo] = useState<Repository | null>(
+        (location.state as { repo?: Repository })?.repo || null
+    );
 
     const [deployments, setDeployments] = useState<DeploymentListItem[]>([]);
     const [loading, setLoading] = useState(true);
 
     useEffect(() => {
-        getDeploymentsByRepoId(id)
-            .then(setDeployments)
-            .catch((err) => {
-                console.error('배포 목록 로드 실패:', err);
-                toast.error('배포 목록을 불러오는데 실패했습니다');
-            })
-            .finally(() => setLoading(false));
-    }, [id]);
+        const loadData = async () => {
+            try {
+                // repo가 없으면 API로 가져오기
+                if (!repo) {
+                    const repoData = await getRepositoryById(id);
+                    if (repoData) {
+                        setRepo(repoData);
+                    }
+                }
 
-    if (!repo) {
-        return <div>리포지토리를 찾을 수 없습니다</div>;
-    }
+                // 배포 목록 가져오기
+                const deploymentsData = await getDeploymentsByRepoId(id);
+                setDeployments(deploymentsData);
+            } catch (err) {
+                console.error('데이터 로드 실패:', err);
+                toast.error('데이터를 불러오는데 실패했습니다');
+            } finally {
+                setLoading(false);
+            }
+        };
+
+        loadData();
+    }, [id, repo]);
 
     if (loading) {
         return (
             <div className="min-h-screen bg-background flex items-center justify-center">
                 <p className="text-muted-foreground">로딩 중...</p>
+            </div>
+        );
+    }
+
+    if (!repo) {
+        return (
+            <div className="min-h-screen bg-background flex items-center justify-center">
+                <div className="text-center">
+                    <h2 className="text-2xl font-bold mb-2">리포지토리를 찾을 수 없습니다</h2>
+                    <Link to="/">
+                        <Button>홈으로 돌아가기</Button>
+                    </Link>
+                </div>
             </div>
         );
     }

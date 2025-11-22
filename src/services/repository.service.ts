@@ -11,6 +11,15 @@ export async function getRepositories(): Promise<Repository[]> {
     return response.data.data;
 }
 
+export async function getRepositoryById(projectId: number): Promise<Repository | undefined> {
+    if (import.meta.env.VITE_USE_MOCK === 'true') {
+        return mockRepositories.find(r => r.id === projectId);
+    }
+
+    const response = await apiClient.get<{ data: Repository }>(`/api/repos/${projectId}`);
+    return response.data.data;
+}
+
 export async function getDeploymentsByRepoId(projectId: number): Promise<DeploymentListItem[]> {
     if (import.meta.env.VITE_USE_MOCK === 'true') {
         return mockDeploymentList[projectId] || [];
