@@ -1,6 +1,6 @@
 import { useState, useEffect } from 'react';
 import { useParams, useNavigate, Link, useSearchParams, useLocation } from 'react-router-dom';
-import { Card, CardContent, CardDescription, CardHeader, CardTitle } from '@/components/ui/card';
+import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card';
 import { Badge } from '@/components/ui/badge';
 import { Button } from '@/components/ui/button';
 import { ArrowLeft, CheckCircle2, XCircle, Loader2, Lock, ChevronRight } from 'lucide-react';
@@ -819,39 +819,31 @@ export default function DeploymentFlowPage() {
             </header>
 
             <main className="container mx-auto py-8 px-4">
-                {/* Deployment Summary */}
+                {/* Repository Summary */}
                 <Card className="mb-8 max-w-3xl mx-auto">
                     <CardHeader>
                         <div className="flex items-start justify-between">
                             <div>
-                                <CardTitle className="text-2xl">{deployment.repositoryName}</CardTitle>
-                                <CardDescription className="mt-2">배포 ID: {deployment.id}</CardDescription>
+                                <CardTitle className="text-3xl">{repo?.name || deployment.repositoryName}</CardTitle>
                             </div>
                         </div>
                     </CardHeader>
                     <CardContent>
-                        <div className="grid grid-cols-1 md:grid-cols-3 gap-4">
+                        <div className="grid grid-cols-2 gap-4">
                             <div>
-                                <p className="text-sm text-muted-foreground mb-1">배포 대상 버전</p>
-                                <div className="flex items-center gap-2">
-                                    {deployment.version.tag && (
-                                        <Badge variant="outline" className="font-mono">
-                                            {deployment.version.tag}
-                                        </Badge>
-                                    )}
-                                    <code className="text-xs bg-muted px-2 py-1 rounded">
-                                        {deployment.version.commitSha}
-                                    </code>
-                                </div>
+                                <p className="text-sm text-muted-foreground mb-1">배포 시작 시각</p>
+                                <p className="font-medium">{deployment.createdAt}</p>
                             </div>
                             <div>
-                                <p className="text-sm text-muted-foreground mb-1">생성 시각</p>
-                                <p className="text-sm font-medium">{deployment.createdAt}</p>
+                                <p className="text-sm text-muted-foreground mb-1">커밋 해시</p>
+                                <Badge variant="outline" className="font-mono text-xs">
+                                    {deployment.version.commitSha}
+                                </Badge>
                             </div>
-                            <div>
-                                <p className="text-sm text-muted-foreground mb-1">커밋 메시지</p>
-                                <p className="text-sm font-medium line-clamp-1">{deployment.version.commitMessage}</p>
-                            </div>
+                        </div>
+                        <div className="mt-4 pt-4 border-t">
+                            <p className="text-sm text-muted-foreground">커밋 메시지</p>
+                            <p className="mt-1">{deployment.version.commitMessage}</p>
                         </div>
                     </CardContent>
                 </Card>
