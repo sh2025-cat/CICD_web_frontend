@@ -77,7 +77,6 @@ export interface DeploymentStage {
     name: string;
     status: CIStatus;
     details?: any;
-    deployStep?: 'initial' | 'deploying' | 'deployed' | 'switching' | 'switched' | 'failed';
 }
 
 // 인프라 상태 확인 API 응답 타입

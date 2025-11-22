@@ -7,7 +7,7 @@ import { ArrowLeft, CheckCircle2, XCircle, Loader2, Lock, ChevronRight } from 'l
 import { mockDeployments, mockDeploymentFlowData, type Deployment, type CIStatus, type DeploymentFlowData, type Repository, type InfrastructureDetail } from '@/lib/mock-data';
 import { TreeVisualization } from '@/components/tree-visualization';
 import { toast } from 'sonner';
-import { streamDeploymentLogs, getDeploymentFlow, updateDeploymentStep, getInfrastructureDetail } from '@/services/deployment.service';
+import { streamDeploymentLogs, getDeploymentFlow, updateDeploymentStep, getInfrastructureDetail, startDeployment, subscribeDeploymentStatus } from '@/services/deployment.service';
 
 export default function DeploymentFlowPage() {
     const params = useParams();
@@ -16,8 +16,8 @@ export default function DeploymentFlowPage() {
     const [searchParams] = useSearchParams();
     const location = useLocation();
 
-    // 이전 페이지에서 전달받은 리포지토리 데이터 (나중에 사용 가능)
-    const _repo = (location.state as { repo?: Repository })?.repo || null;
+    // 이전 페이지에서 전달받은 리포지토리 데이터
+    const repo = (location.state as { repo?: Repository })?.repo || null;
 
     // 숫자 ID면 새로운 mockDeploymentFlowData 사용, 문자열이면 기존 mockDeployments 사용
     const isNumericId = !isNaN(Number(deploymentId));
@@ -41,7 +41,13 @@ export default function DeploymentFlowPage() {
                 security: { name: '보안 점검', status: flowData.steps.find(s => s.name === 'security')?.status as CIStatus || 'LOCKED' },
                 build: { name: '빌드', status: flowData.steps.find(s => s.name === 'build')?.status as CIStatus || 'LOCKED' },
                 infrastructure: { name: '인프라 상태 확인', status: 'SUCCESS' }, // 인프라는 무조건 성공
-                deploy: { name: '배포', status: flowData.steps.find(s => s.name === 'deploy')?.status as CIStatus || 'LOCKED' },
+                // 배포는 steps에 deploy가 없으면 LOCKED (대기), 있으면 실제 status
+                deploy: {
+                    name: '배포',
+                    status: flowData.steps.find(s => s.name === 'deploy')
+                        ? (flowData.steps.find(s => s.name === 'deploy')?.status as CIStatus)
+                        : 'LOCKED'
+                },
                 monitoring: { name: '모니터링', status: flowData.steps.find(s => s.name === 'monitoring')?.status as CIStatus || 'LOCKED' },
             },
         };
@@ -86,55 +92,6 @@ export default function DeploymentFlowPage() {
                 });
         }
     }, [isNumericId, numericId]);
-
-    useEffect(() => {
-        if (!deployment) return;
-
-        const deployStage = deployment.stages.deploy;
-
-        if (deployStage.status === 'RUNNING') {
-            if (deployStage.deployStep === 'deploying') {
-                const timer = setTimeout(() => {
-                    setDeployment((prev) => {
-                        if (!prev) return prev;
-                        return {
-                            ...prev,
-                            stages: {
-                                ...prev.stages,
-                                deploy: {
-                                    ...prev.stages.deploy,
-                                    deployStep: 'deployed',
-                                },
-                            },
-                        };
-                    });
-                    toast.success('배포가 완료되었습니다. 전환을 진행해주세요.');
-                }, 3000);
-                return () => clearTimeout(timer);
-            }
-
-            if (deployStage.deployStep === 'switching') {
-                const timer = setTimeout(() => {
-                    setDeployment((prev) => {
-                        if (!prev) return prev;
-                        return {
-                            ...prev,
-                            stages: {
-                                ...prev.stages,
-                                deploy: {
-                                    ...prev.stages.deploy,
-                                    deployStep: 'switched',
-                                    status: 'SUCCESS',
-                                },
-                            },
-                        };
-                    });
-                    toast.success('Blue → Green 전환이 완료되었습니다.');
-                }, 3000);
-                return () => clearTimeout(timer);
-            }
-        }
-    }, [deployment?.stages.deploy.deployStep, deployment?.stages.deploy.status]);
 
     useEffect(() => {
         if (deployment) {
@@ -295,24 +252,10 @@ export default function DeploymentFlowPage() {
 
         if (nextIndex >= stages.length) return;
 
-        if (stages[lastSuccessIndex]?.key === 'deploy' && deployment.stages.deploy.deployStep !== 'switched') {
-            toast.error('Blue → Green 전환을 먼저 진행해주세요');
-            return;
-        }
-
         const updatedDeployment = { ...deployment };
         const targetStageKey = stages[nextIndex].key as keyof typeof deployment.stages;
 
-        if (targetStageKey === 'deploy') {
-            updatedDeployment.stages[targetStageKey].status = 'RUNNING';
-            if (!updatedDeployment.stages[targetStageKey].deployStep) {
-                updatedDeployment.stages[targetStageKey].deployStep = 'initial';
-            }
-        } else if (targetStageKey === 'monitoring') {
-            updatedDeployment.stages[targetStageKey].status = 'SUCCESS';
-        } else {
-            updatedDeployment.stages[targetStageKey].status = 'SUCCESS';
-        }
+        updatedDeployment.stages[targetStageKey].status = 'SUCCESS';
 
         updatedDeployment.currentStage = stages[nextIndex].name;
 
@@ -337,8 +280,6 @@ export default function DeploymentFlowPage() {
         if (nextStage.status !== 'LOCKED') return true;
 
         if (currentStage.status === 'SUCCESS') return true;
-
-        if (currentStage.key === 'deploy' && deployment.stages.deploy.deployStep !== 'switched') return false;
 
         return false;
     };
@@ -597,181 +538,83 @@ export default function DeploymentFlowPage() {
                     </CardContent>
                 );
             case 'deploy':
-                const deployStep = deployment.stages.deploy.deployStep || 'initial';
-                const isDeployFailed = deployment.stages.deploy.status === 'FAILED';
+                const handleDeployStart = async () => {
+                    if (!deploymentFlowData || !repo) {
+                        toast.error('배포 정보를 찾을 수 없습니다.');
+                        return;
+                    }
+
+                    try {
+                        const imageTag = deploymentFlowData.meta.imageTag;
+                        const projectId = repo.id;
+
+                        // 1. 배포 시작 API 호출
+                        await startDeployment(imageTag, numericId);
+                        toast.success('배포가 시작되었습니다.');
+
+                        // 2. SSE로 배포 상태 구독
+                        subscribeDeploymentStatus(
+                            projectId,
+                            (logLine) => {
+                                console.log('Deploy log:', logLine);
+                                // 로그를 화면에 표시할 수 있음
+                            },
+                            (status) => {
+                                if (status === 'SUCCESS') {
+                                    toast.success('배포가 성공적으로 완료되었습니다!');
+                                    // deployment 상태 업데이트
+                                    setDeployment((prev) => {
+                                        if (!prev) return prev;
+                                        return {
+                                            ...prev,
+                                            stages: {
+                                                ...prev.stages,
+                                                deploy: { ...prev.stages.deploy, status: 'SUCCESS' },
+                                            },
+                                        };
+                                    });
+                                } else {
+                                    toast.error('배포가 실패했습니다.');
+                                    setDeployment((prev) => {
+                                        if (!prev) return prev;
+                                        return {
+                                            ...prev,
+                                            stages: {
+                                                ...prev.stages,
+                                                deploy: { ...prev.stages.deploy, status: 'FAILED' },
+                                            },
+                                        };
+                                    });
+                                }
+                            }
+                        );
+                    } catch (error) {
+                        console.error('배포 시작 실패:', error);
+                        toast.error('배포 시작에 실패했습니다.');
+                    }
+                };
 
                 return (
                     <CardContent className="space-y-4">
-                        {isDeployFailed && deployment.stages.deploy.details && (
-                            <div className="p-4 bg-destructive/10 border border-destructive/20 rounded-lg mb-4">
-                                <h4 className="font-semibold text-destructive mb-2">
-                                    {deployment.stages.deploy.details.error || '배포 실패'}
-                                </h4>
-                                <p className="text-sm text-muted-foreground">
-                                    {deployment.stages.deploy.details.message}
-                                </p>
-                            </div>
-                        )}
-
-                        <div className="space-y-3">
-                            <div className="flex justify-between text-sm">
-                                <span className="text-muted-foreground">현재 라이브 환경</span>
-                                <Badge variant={deployStep === 'switched' ? 'default' : 'outline'}>
-                                    {deployStep === 'switched' ? 'Green' : 'Blue'}
-                                </Badge>
-                            </div>
-                            <div className="flex justify-between text-sm">
-                                <span className="text-muted-foreground">배포 대상 환경</span>
-                                <Badge variant="outline">Green</Badge>
-                            </div>
+                        <div className="p-4 bg-blue-50 border border-blue-200 rounded-lg">
+                            <p className="text-sm text-blue-800">
+                                배포 준비가 완료되었습니다. 배포를 시작하려면 아래 버튼을 클릭하세요.
+                            </p>
                         </div>
-                        <div className="border rounded-lg overflow-hidden">
-                            <table className="w-full text-sm">
-                                <thead className="bg-muted">
-                                    <tr>
-                                        <th className="text-left p-2">항목</th>
-                                        <th className="text-left p-2">이전 (Blue)</th>
-                                        <th className="text-left p-2">이후 (Green)</th>
-                                    </tr>
-                                </thead>
-                                <tbody>
-                                    <tr className="border-t">
-                                        <td className="p-2 text-muted-foreground">Commit</td>
-                                        <td className="p-2">
-                                            <code className="text-xs bg-muted px-2 py-1 rounded">a3f2c1d</code>
-                                        </td>
-                                        <td className="p-2">
-                                            <code className="text-xs bg-muted px-2 py-1 rounded">
-                                                {deployment.version.commitSha}
-                                            </code>
-                                        </td>
-                                    </tr>
-                                    <tr className="border-t">
-                                        <td className="p-2 text-muted-foreground">이미지 태그</td>
-                                        <td className="p-2 text-xs">cat-frontend:a3f2c1d</td>
-                                        <td className="p-2 text-xs">cat-frontend:{deployment.version.commitSha}</td>
-                                    </tr>
-                                </tbody>
-                            </table>
-                        </div>
-
-                        <div className="flex gap-2">
-                            {isDeployFailed ? (
-                                <Button
-                                    className="w-full bg-green-500 hover:bg-green-600 text-white"
-                                    variant="outline"
-                                    onClick={() => toast.info('재시도 기능은 준비 중입니다.')}
-                                >
-                                    <Loader2 className="mr-2 h-4 w-4" />
-                                    재시도
-                                </Button>
-                            ) : (
+                        <Button
+                            className="w-full bg-green-500 hover:bg-green-600 text-white"
+                            onClick={handleDeployStart}
+                            disabled={deployment.stages.deploy.status === 'RUNNING'}
+                        >
+                            {deployment.stages.deploy.status === 'RUNNING' ? (
                                 <>
-                                    {deployStep === 'initial' && (
-                                        <Button
-                                            className="w-full bg-green-500 hover:bg-green-600 text-white"
-                                            onClick={() => {
-                                                setDeployment((prev) => {
-                                                    if (!prev) return prev;
-                                                    return {
-                                                        ...prev,
-                                                        stages: {
-                                                            ...prev.stages,
-                                                            deploy: { ...prev.stages.deploy, deployStep: 'deploying' },
-                                                        },
-                                                    };
-                                                });
-                                            }}
-                                        >
-                                            배포 시작
-                                        </Button>
-                                    )}
-
-                                    {deployStep === 'deploying' && (
-                                        <Button className="w-full bg-green-500 hover:bg-green-600 text-white" disabled>
-                                            <Loader2 className="mr-2 h-4 w-4 animate-spin" />
-                                            배포 진행 중...
-                                        </Button>
-                                    )}
-
-                                    {(deployStep === 'deployed' || deployStep === 'switching') && (
-                                        <>
-                                            <Button
-                                                className="flex-1 bg-green-500 hover:bg-green-600 text-white"
-                                                onClick={() => {
-                                                    setDeployment((prev) => {
-                                                        if (!prev) return prev;
-                                                        return {
-                                                            ...prev,
-                                                            stages: {
-                                                                ...prev.stages,
-                                                                deploy: {
-                                                                    ...prev.stages.deploy,
-                                                                    deployStep: 'switching',
-                                                                },
-                                                            },
-                                                        };
-                                                    });
-                                                }}
-                                                disabled={deployStep === 'switching'}
-                                            >
-                                                {deployStep === 'switching' ? (
-                                                    <>
-                                                        <Loader2 className="mr-2 h-4 w-4 animate-spin" />
-                                                        전환 중...
-                                                    </>
-                                                ) : (
-                                                    '전환하기'
-                                                )}
-                                            </Button>
-                                            <Button
-                                                className="bg-red-500 hover:bg-red-600 text-white"
-                                                onClick={() => {
-                                                    if (confirm('배포를 취소하시겠습니까?')) {
-                                                        setDeployment((prev) => {
-                                                            if (!prev) return prev;
-                                                            return {
-                                                                ...prev,
-                                                                stages: {
-                                                                    ...prev.stages,
-                                                                    deploy: {
-                                                                        ...prev.stages.deploy,
-                                                                        deployStep: 'initial',
-                                                                    },
-                                                                },
-                                                            };
-                                                        });
-                                                        toast.info('배포가 취소되었습니다.');
-                                                    }
-                                                }}
-                                                disabled={deployStep === 'switching'}
-                                            >
-                                                배포 취소
-                                            </Button>
-                                        </>
-                                    )}
-
-                                    {deployStep === 'switched' && (
-                                        <div className="flex gap-2 w-full">
-                                            <Button
-                                                className="flex-1 bg-green-500 hover:bg-green-600 text-white"
-                                                disabled
-                                                variant="secondary"
-                                            >
-                                                <CheckCircle2 className="mr-2 h-4 w-4" />
-                                                전환 완료
-                                            </Button>
-                                            <Button
-                                                className="bg-red-500 hover:bg-red-600 text-white"
-                                                onClick={() => toast.info('롤백 기능은 추후 지원 예정입니다.')}
-                                            >
-                                                롤백
-                                            </Button>
-                                        </div>
-                                    )}
+                                    <Loader2 className="mr-2 h-4 w-4 animate-spin" />
+                                    배포 진행 중...
                                 </>
+                            ) : (
+                                '배포 시작'
                             )}
-                        </div>
+                        </Button>
                     </CardContent>
                 );
             case 'monitoring':

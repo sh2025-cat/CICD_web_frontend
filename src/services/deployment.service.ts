@@ -257,3 +257,59 @@ export async function getInfrastructureDetail(deploymentId: number): Promise<Inf
     );
     return response.data.data;
 }
+
+/**
+ * 배포 시작
+ * POST /api/ecs/deploy
+ *
+ * @param imageTag - 이미지 태그 (예: cicd_frontend:a1b2c3d)
+ * @param deploymentId - 배포 ID
+ */
+export async function startDeployment(imageTag: string, deploymentId: number): Promise<void> {
+    if (import.meta.env.VITE_USE_MOCK === 'true') {
+        console.log(`[Mock] Starting deployment: ${imageTag}, deploymentId: ${deploymentId}`);
+        return;
+    }
+
+    await apiClient.post('/api/ecs/deploy', {
+        imageTag,
+        deploymentId,
+    });
+}
+
+/**
+ * 배포 상태 SSE 구독
+ * GET /api/sse/subscribe/{projectId}
+ *
+ * @param projectId - 프로젝트(리포지토리) ID
+ * @param onLog - 로그 수신 시 콜백
+ * @param onComplete - 배포 완료 시 콜백 (SUCCESS | FAILED)
+ * @returns EventSource 인스턴스
+ */
+export function subscribeDeploymentStatus(
+    projectId: number,
+    onLog: (logLine: string) => void,
+    onComplete: (status: 'SUCCESS' | 'FAILED') => void
+): EventSource {
+    const baseUrl = import.meta.env.VITE_API_BASE_URL || 'http://localhost:8080';
+    const url = `${baseUrl}/api/sse/subscribe/${projectId}`;
+
+    const eventSource = new EventSource(url);
+
+    eventSource.addEventListener('log', (event: MessageEvent) => {
+        onLog(event.data);
+    });
+
+    eventSource.addEventListener('deployment_complete', (event: MessageEvent) => {
+        const status = event.data as 'SUCCESS' | 'FAILED';
+        onComplete(status);
+        eventSource.close();
+    });
+
+    eventSource.onerror = (error) => {
+        console.error('SSE 연결 오류:', error);
+        eventSource.close();
+    };
+
+    return eventSource;
+}
