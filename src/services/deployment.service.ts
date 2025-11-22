@@ -1,5 +1,5 @@
-import { mockDeploymentFlowData } from '@/lib/mock-data';
-import type { DeploymentFlowData, StepName } from '@/lib/mock-data';
+import { mockDeploymentFlowData, mockInfrastructureDetail } from '@/lib/mock-data';
+import type { DeploymentFlowData, StepName, InfrastructureDetail } from '@/lib/mock-data';
 import apiClient from '@/api/client';
 
 /**
@@ -234,4 +234,26 @@ export async function updateDeploymentStep(
         console.error('Failed to update deployment step:', error);
         throw error;
     }
+}
+
+/**
+ * 인프라 상태 확인 조회
+ * GET /api/ecs/clusters/{deploymentId}/detail
+ *
+ * @param deploymentId - 배포 ID
+ * @returns 인프라 상세 정보
+ */
+export async function getInfrastructureDetail(deploymentId: number): Promise<InfrastructureDetail> {
+    if (import.meta.env.VITE_USE_MOCK === 'true') {
+        const infraDetail = mockInfrastructureDetail[deploymentId];
+        if (!infraDetail) {
+            throw new Error(`Infrastructure detail for deployment ${deploymentId} not found`);
+        }
+        return infraDetail;
+    }
+
+    const response = await apiClient.get<{ data: InfrastructureDetail }>(
+        `/api/ecs/clusters/${deploymentId}/detail`
+    );
+    return response.data.data;
 }

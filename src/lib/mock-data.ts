@@ -80,6 +80,33 @@ export interface DeploymentStage {
     deployStep?: 'initial' | 'deploying' | 'deployed' | 'switching' | 'switched' | 'failed';
 }
 
+// 인프라 상태 확인 API 응답 타입
+export interface InfrastructureDetail {
+    serviceName: string;
+    status: string;
+    desiredCount: number;
+    runningCount: number;
+    pendingCount: number;
+    cpu: string;
+    memory: string;
+    taskDefinitionArn: string;
+    containerName: string;
+    image: string;
+    environments: string[];
+    subnets: string[];
+    securityGroups: string[];
+    assignPublicIp: string;
+    loadBalancerTargetGroup: string;
+    containerPort: number;
+    executionRoleArn: string;
+    taskRoleArn: string;
+    logGroup: string;
+    deploymentMaxPercent: number;
+    deploymentMinHealthyPercent: number;
+    capacityProviderStrategy: string;
+    secretKeys: string[];
+}
+
 export interface Deployment {
     id: string;
     repositoryName: string;
@@ -801,3 +828,157 @@ export function createNewDeployment(repoId: number, deploymentItem: DeploymentLi
 
     return deploymentId;
 }
+
+// 인프라 상태 확인 Mock 데이터
+export const mockInfrastructureDetail: Record<number, InfrastructureDetail> = {
+    105: {
+        serviceName: 'cicd_frontend-service',
+        status: 'ACTIVE',
+        desiredCount: 2,
+        runningCount: 2,
+        pendingCount: 0,
+        cpu: '256',
+        memory: '512',
+        taskDefinitionArn: 'arn:aws:ecs:ap-northeast-2:123456789012:task-definition/cicd_frontend:10',
+        containerName: 'cicd_frontend-container',
+        image: 'cicd_frontend:a1b2c3d',
+        environments: ['NODE_ENV=production', 'PORT=3000'],
+        subnets: ['subnet-0a1b2c3d4e5f6g7h8', 'subnet-1b2c3d4e5f6g7h8i9'],
+        securityGroups: ['sg-0a1b2c3d4e5f6g7h8'],
+        assignPublicIp: 'ENABLED',
+        loadBalancerTargetGroup: 'arn:aws:elasticloadbalancing:ap-northeast-2:123456789012:targetgroup/cicd-fe-tg/1234567890abcdef',
+        containerPort: 3000,
+        executionRoleArn: 'arn:aws:iam::123456789012:role/ecsTaskExecutionRole',
+        taskRoleArn: 'arn:aws:iam::123456789012:role/ecsTaskRole',
+        logGroup: '/ecs/cicd_frontend',
+        deploymentMaxPercent: 200,
+        deploymentMinHealthyPercent: 100,
+        capacityProviderStrategy: 'FARGATE',
+        secretKeys: ['DB_PASSWORD', 'API_KEY'],
+    },
+    104: {
+        serviceName: 'cicd_frontend-service',
+        status: 'ACTIVE',
+        desiredCount: 2,
+        runningCount: 1,
+        pendingCount: 1,
+        cpu: '256',
+        memory: '512',
+        taskDefinitionArn: 'arn:aws:ecs:ap-northeast-2:123456789012:task-definition/cicd_frontend:9',
+        containerName: 'cicd_frontend-container',
+        image: 'cicd_frontend:f9e8d7c',
+        environments: ['NODE_ENV=production', 'PORT=3000'],
+        subnets: ['subnet-0a1b2c3d4e5f6g7h8', 'subnet-1b2c3d4e5f6g7h8i9'],
+        securityGroups: ['sg-0a1b2c3d4e5f6g7h8'],
+        assignPublicIp: 'ENABLED',
+        loadBalancerTargetGroup: 'arn:aws:elasticloadbalancing:ap-northeast-2:123456789012:targetgroup/cicd-fe-tg/1234567890abcdef',
+        containerPort: 3000,
+        executionRoleArn: 'arn:aws:iam::123456789012:role/ecsTaskExecutionRole',
+        taskRoleArn: 'arn:aws:iam::123456789012:role/ecsTaskRole',
+        logGroup: '/ecs/cicd_frontend',
+        deploymentMaxPercent: 200,
+        deploymentMinHealthyPercent: 100,
+        capacityProviderStrategy: 'FARGATE',
+        secretKeys: ['DB_PASSWORD', 'API_KEY'],
+    },
+    103: {
+        serviceName: 'cicd_frontend-service',
+        status: 'ACTIVE',
+        desiredCount: 2,
+        runningCount: 2,
+        pendingCount: 0,
+        cpu: '256',
+        memory: '512',
+        taskDefinitionArn: 'arn:aws:ecs:ap-northeast-2:123456789012:task-definition/cicd_frontend:8',
+        containerName: 'cicd_frontend-container',
+        image: 'cicd_frontend:a3f2c1d',
+        environments: ['NODE_ENV=production', 'PORT=3000'],
+        subnets: ['subnet-0a1b2c3d4e5f6g7h8', 'subnet-1b2c3d4e5f6g7h8i9'],
+        securityGroups: ['sg-0a1b2c3d4e5f6g7h8'],
+        assignPublicIp: 'ENABLED',
+        loadBalancerTargetGroup: 'arn:aws:elasticloadbalancing:ap-northeast-2:123456789012:targetgroup/cicd-fe-tg/1234567890abcdef',
+        containerPort: 3000,
+        executionRoleArn: 'arn:aws:iam::123456789012:role/ecsTaskExecutionRole',
+        taskRoleArn: 'arn:aws:iam::123456789012:role/ecsTaskRole',
+        logGroup: '/ecs/cicd_frontend',
+        deploymentMaxPercent: 200,
+        deploymentMinHealthyPercent: 100,
+        capacityProviderStrategy: 'FARGATE',
+        secretKeys: ['DB_PASSWORD', 'API_KEY'],
+    },
+    102: {
+        serviceName: 'cicd_frontend-service',
+        status: 'ACTIVE',
+        desiredCount: 2,
+        runningCount: 2,
+        pendingCount: 0,
+        cpu: '256',
+        memory: '512',
+        taskDefinitionArn: 'arn:aws:ecs:ap-northeast-2:123456789012:task-definition/cicd_frontend:7',
+        containerName: 'cicd_frontend-container',
+        image: 'cicd_frontend:b2a1c3d',
+        environments: ['NODE_ENV=production', 'PORT=3000'],
+        subnets: ['subnet-0a1b2c3d4e5f6g7h8', 'subnet-1b2c3d4e5f6g7h8i9'],
+        securityGroups: ['sg-0a1b2c3d4e5f6g7h8'],
+        assignPublicIp: 'ENABLED',
+        loadBalancerTargetGroup: 'arn:aws:elasticloadbalancing:ap-northeast-2:123456789012:targetgroup/cicd-fe-tg/1234567890abcdef',
+        containerPort: 3000,
+        executionRoleArn: 'arn:aws:iam::123456789012:role/ecsTaskExecutionRole',
+        taskRoleArn: 'arn:aws:iam::123456789012:role/ecsTaskRole',
+        logGroup: '/ecs/cicd_frontend',
+        deploymentMaxPercent: 200,
+        deploymentMinHealthyPercent: 100,
+        capacityProviderStrategy: 'FARGATE',
+        secretKeys: ['DB_PASSWORD', 'API_KEY'],
+    },
+    201: {
+        serviceName: 'cicd_backend-service',
+        status: 'ACTIVE',
+        desiredCount: 2,
+        runningCount: 2,
+        pendingCount: 0,
+        cpu: '512',
+        memory: '1024',
+        taskDefinitionArn: 'arn:aws:ecs:ap-northeast-2:123456789012:task-definition/cicd_backend:12',
+        containerName: 'cicd_backend-container',
+        image: 'cicd_backend:d4e5f6g',
+        environments: ['SPRING_PROFILES_ACTIVE=prod', 'SERVER_PORT=8080'],
+        subnets: ['subnet-0a1b2c3d4e5f6g7h8', 'subnet-1b2c3d4e5f6g7h8i9'],
+        securityGroups: ['sg-0a1b2c3d4e5f6g7h8'],
+        assignPublicIp: 'ENABLED',
+        loadBalancerTargetGroup: 'arn:aws:elasticloadbalancing:ap-northeast-2:123456789012:targetgroup/cicd-be-tg/abcdef1234567890',
+        containerPort: 8080,
+        executionRoleArn: 'arn:aws:iam::123456789012:role/ecsTaskExecutionRole',
+        taskRoleArn: 'arn:aws:iam::123456789012:role/ecsTaskRole',
+        logGroup: '/ecs/cicd_backend',
+        deploymentMaxPercent: 200,
+        deploymentMinHealthyPercent: 100,
+        capacityProviderStrategy: 'FARGATE',
+        secretKeys: ['DB_PASSWORD', 'JWT_SECRET'],
+    },
+    200: {
+        serviceName: 'cicd_backend-service',
+        status: 'ACTIVE',
+        desiredCount: 2,
+        runningCount: 2,
+        pendingCount: 0,
+        cpu: '512',
+        memory: '1024',
+        taskDefinitionArn: 'arn:aws:ecs:ap-northeast-2:123456789012:task-definition/cicd_backend:11',
+        containerName: 'cicd_backend-container',
+        image: 'cicd_backend:b7e9f2a',
+        environments: ['SPRING_PROFILES_ACTIVE=prod', 'SERVER_PORT=8080'],
+        subnets: ['subnet-0a1b2c3d4e5f6g7h8', 'subnet-1b2c3d4e5f6g7h8i9'],
+        securityGroups: ['sg-0a1b2c3d4e5f6g7h8'],
+        assignPublicIp: 'ENABLED',
+        loadBalancerTargetGroup: 'arn:aws:elasticloadbalancing:ap-northeast-2:123456789012:targetgroup/cicd-be-tg/abcdef1234567890',
+        containerPort: 8080,
+        executionRoleArn: 'arn:aws:iam::123456789012:role/ecsTaskExecutionRole',
+        taskRoleArn: 'arn:aws:iam::123456789012:role/ecsTaskRole',
+        logGroup: '/ecs/cicd_backend',
+        deploymentMaxPercent: 200,
+        deploymentMinHealthyPercent: 100,
+        capacityProviderStrategy: 'FARGATE',
+        secretKeys: ['DB_PASSWORD', 'JWT_SECRET'],
+    },
+};

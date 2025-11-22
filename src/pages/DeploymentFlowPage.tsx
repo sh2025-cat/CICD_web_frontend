@@ -4,10 +4,10 @@ import { Card, CardContent, CardDescription, CardHeader, CardTitle } from '@/com
 import { Badge } from '@/components/ui/badge';
 import { Button } from '@/components/ui/button';
 import { ArrowLeft, CheckCircle2, XCircle, Loader2, Lock, ChevronRight } from 'lucide-react';
-import { mockDeployments, mockDeploymentFlowData, type Deployment, type CIStatus, type DeploymentFlowData, type Repository } from '@/lib/mock-data';
+import { mockDeployments, mockDeploymentFlowData, type Deployment, type CIStatus, type DeploymentFlowData, type Repository, type InfrastructureDetail } from '@/lib/mock-data';
 import { TreeVisualization } from '@/components/tree-visualization';
 import { toast } from 'sonner';
-import { streamDeploymentLogs, getDeploymentFlow, updateDeploymentStep } from '@/services/deployment.service';
+import { streamDeploymentLogs, getDeploymentFlow, updateDeploymentStep, getInfrastructureDetail } from '@/services/deployment.service';
 
 export default function DeploymentFlowPage() {
     const params = useParams();
@@ -40,7 +40,7 @@ export default function DeploymentFlowPage() {
                 test: { name: '테스트', status: flowData.steps.find(s => s.name === 'test')?.status as CIStatus || 'LOCKED' },
                 security: { name: '보안 점검', status: flowData.steps.find(s => s.name === 'security')?.status as CIStatus || 'LOCKED' },
                 build: { name: '빌드', status: flowData.steps.find(s => s.name === 'build')?.status as CIStatus || 'LOCKED' },
-                infrastructure: { name: '인프라 상태 확인', status: flowData.steps.find(s => s.name === 'infra')?.status as CIStatus || 'LOCKED' },
+                infrastructure: { name: '인프라 상태 확인', status: 'SUCCESS' }, // 인프라는 무조건 성공
                 deploy: { name: '배포', status: flowData.steps.find(s => s.name === 'deploy')?.status as CIStatus || 'LOCKED' },
                 monitoring: { name: '모니터링', status: flowData.steps.find(s => s.name === 'monitoring')?.status as CIStatus || 'LOCKED' },
             },
@@ -56,6 +56,7 @@ export default function DeploymentFlowPage() {
     const [selectedStageKey, setSelectedStageKey] = useState<string>('test');
     const [logs, setLogs] = useState<string[]>([]);
     const [isStreaming, setIsStreaming] = useState(false);
+    const [infrastructureDetail, setInfrastructureDetail] = useState<InfrastructureDetail | null>(null);
 
     // API로부터 배포 플로우 데이터 가져오기
     useEffect(() => {
@@ -205,6 +206,20 @@ export default function DeploymentFlowPage() {
             setIsStreaming(false);
         };
     }, [deploymentFlowData, selectedStageKey]);
+
+    // 인프라 상태 확인 API 호출
+    useEffect(() => {
+        if (selectedStageKey === 'infrastructure' && isNumericId) {
+            getInfrastructureDetail(numericId)
+                .then((data) => {
+                    setInfrastructureDetail(data);
+                })
+                .catch((err) => {
+                    console.error('인프라 상태 확인 로드 실패:', err);
+                    toast.error('인프라 상태 정보를 불러오는데 실패했습니다');
+                });
+        }
+    }, [selectedStageKey, isNumericId, numericId]);
 
     if (!deployment) {
         return (
@@ -504,53 +519,77 @@ export default function DeploymentFlowPage() {
                     </CardContent>
                 );
             case 'infrastructure':
+                if (!infrastructureDetail) {
+                    return (
+                        <CardContent className="space-y-4">
+                            <div className="flex items-center justify-center py-8">
+                                <Loader2 className="h-8 w-8 animate-spin text-muted-foreground" />
+                            </div>
+                        </CardContent>
+                    );
+                }
                 return (
                     <CardContent className="space-y-4">
                         <div className="space-y-3">
                             <div>
-                                <h4 className="font-semibold text-sm mb-2">ECS 서비스 상태</h4>
+                                <h4 className="font-semibold text-sm mb-2">ECS 서비스 정보</h4>
                                 <div className="space-y-1 text-sm">
                                     <div className="flex justify-between">
                                         <span className="text-muted-foreground">서비스 이름</span>
-                                        <span className="font-medium">cat-fe-service</span>
+                                        <span className="font-medium">{infrastructureDetail.serviceName}</span>
                                     </div>
                                     <div className="flex justify-between">
-                                        <span className="text-muted-foreground">태스크 수</span>
-                                        <span className="font-medium">2 / 2 / 0 (desired / running / pending)</span>
+                                        <span className="text-muted-foreground">CPU / Memory</span>
+                                        <span className="font-medium">{infrastructureDetail.cpu} / {infrastructureDetail.memory}</span>
                                     </div>
                                     <div className="flex justify-between">
-                                        <span className="text-muted-foreground">Task Definition</span>
-                                        <code className="text-xs bg-muted px-2 py-1 rounded">cat-fe-task:12</code>
-                                    </div>
-                                </div>
-                            </div>
-                            <div>
-                                <h4 className="font-semibold text-sm mb-2">Target Group 상태</h4>
-                                <div className="space-y-1 text-sm">
-                                    <div className="flex justify-between">
-                                        <span className="text-muted-foreground">Blue 타겟 그룹</span>
-                                        <span className="font-medium text-green-500">헬시: 2개</span>
-                                    </div>
-                                    <div className="flex justify-between">
-                                        <span className="text-muted-foreground">Green 타겟 그룹</span>
-                                        <span className="font-medium text-green-500">헬시: 2개</span>
-                                    </div>
-                                    <div className="flex justify-between">
-                                        <span className="text-muted-foreground">현재 트래픽</span>
-                                        <Badge variant="outline">Blue</Badge>
+                                        <span className="text-muted-foreground">이미지</span>
+                                        <code className="text-xs bg-muted px-2 py-1 rounded">{infrastructureDetail.image}</code>
                                     </div>
                                 </div>
                             </div>
                             <div>
-                                <h4 className="font-semibold text-sm mb-2">메트릭 (최근 5분)</h4>
+                                <h4 className="font-semibold text-sm mb-2">컨테이너 설정</h4>
                                 <div className="space-y-1 text-sm">
                                     <div className="flex justify-between">
-                                        <span className="text-muted-foreground">CPU 사용률</span>
-                                        <span className="font-medium">23.5%</span>
+                                        <span className="text-muted-foreground">컨테이너 이름</span>
+                                        <span className="font-medium">{infrastructureDetail.containerName}</span>
                                     </div>
                                     <div className="flex justify-between">
-                                        <span className="text-muted-foreground">메모리 사용률</span>
-                                        <span className="font-medium">45.2%</span>
+                                        <span className="text-muted-foreground">컨테이너 포트</span>
+                                        <span className="font-medium">{infrastructureDetail.containerPort}</span>
+                                    </div>
+                                </div>
+                            </div>
+                            <div>
+                                <h4 className="font-semibold text-sm mb-2">태스크 현황</h4>
+                                <div className="space-y-1 text-sm">
+                                    <div className="flex justify-between">
+                                        <span className="text-muted-foreground">원하는 수 / 실행 중 / 대기 중</span>
+                                        <span className="font-medium">
+                                            {infrastructureDetail.desiredCount} / {infrastructureDetail.runningCount} / {infrastructureDetail.pendingCount}
+                                        </span>
+                                    </div>
+                                </div>
+                            </div>
+                            <div>
+                                <h4 className="font-semibold text-sm mb-2">네트워크 설정</h4>
+                                <div className="space-y-1 text-sm">
+                                    <div className="flex justify-between">
+                                        <span className="text-muted-foreground">로드 밸런서 타겟 그룹</span>
+                                    </div>
+                                    <code className="text-xs bg-muted px-2 py-1 rounded block break-all">
+                                        {infrastructureDetail.loadBalancerTargetGroup}
+                                    </code>
+                                    <div className="flex justify-between">
+                                        <span className="text-muted-foreground">서브넷</span>
+                                    </div>
+                                    <div className="text-xs">
+                                        {infrastructureDetail.subnets.map((subnet, i) => (
+                                            <code key={i} className="bg-muted px-2 py-1 rounded mr-1 inline-block mb-1">
+                                                {subnet}
+                                            </code>
+                                        ))}
                                     </div>
                                 </div>
                             </div>
