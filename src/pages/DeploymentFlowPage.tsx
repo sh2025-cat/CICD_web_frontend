@@ -357,6 +357,9 @@ export default function DeploymentFlowPage() {
         const currentIndex = stages.findIndex((s) => s.key === selectedStageKey);
         if (currentIndex === -1 || currentIndex === stages.length - 1) return false;
 
+        // 인프라 단계는 무조건 다음 단계로 진행 가능
+        if (selectedStageKey === 'infrastructure') return true;
+
         const nextStage = stages[currentIndex + 1];
         const currentStage = stages[currentIndex];
 
