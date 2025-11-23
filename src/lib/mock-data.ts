@@ -155,7 +155,7 @@ export const mockDeploymentList: Record<number, DeploymentListItem[]> = {
     1: [
         {
             deploymentId: 105,
-            lastStep: 'test',
+            lastStep: 'build',
             pipelineStatus: 'PENDING',
             commit: {
                 message: 'Update production to v1.1.0',

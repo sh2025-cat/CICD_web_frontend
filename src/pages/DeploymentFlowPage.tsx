@@ -220,7 +220,6 @@ export default function DeploymentFlowPage() {
         );
     }
 
-    // 모든 단계의 실제 status 표시 (완료된 단계는 다른 단계로 이동해도 상태 유지)
     const stages = [
         { key: 'test', name: '테스트' },
         { key: 'sast', name: '보안 점검' },
@@ -228,10 +227,14 @@ export default function DeploymentFlowPage() {
         { key: 'infrastructure', name: '인프라 상태 확인' },
         { key: 'deploy', name: '배포' },
         { key: 'monitoring', name: '모니터링' },
-    ].map((stage) => ({
-        ...stage,
-        status: deployment.stages[stage.key as keyof typeof deployment.stages].status as CIStatus,
-    }));
+    ].map((stage) => {
+        const actualStatus = deployment.stages[stage.key as keyof typeof deployment.stages].status as CIStatus;
+
+        return {
+            ...stage,
+            status: actualStatus,
+        };
+    });
 
     const handleNextStage = async () => {
         const currentIndex = stages.findIndex((s) => s.key === selectedStageKey);
