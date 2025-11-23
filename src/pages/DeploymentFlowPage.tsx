@@ -243,7 +243,16 @@ export default function DeploymentFlowPage() {
         { key: 'deploy', name: '배포' },
         { key: 'monitoring', name: '모니터링' },
     ].map((stage) => {
-        const actualStatus = deployment.stages[stage.key as keyof typeof deployment.stages].status as CIStatus;
+        let actualStatus = deployment.stages[stage.key as keyof typeof deployment.stages].status as CIStatus;
+
+        // 인프라 단계는 현재 선택되어 있거나 이미 지나간 단계이면 무조건 SUCCESS
+        if (stage.key === 'infrastructure') {
+            const currentIndex = ['test', 'sast', 'build', 'infrastructure', 'deploy', 'monitoring'].indexOf(selectedStageKey);
+            const infraIndex = 3; // infrastructure의 인덱스
+            if (currentIndex >= infraIndex) {
+                actualStatus = 'SUCCESS';
+            }
+        }
 
         return {
             ...stage,
