@@ -74,9 +74,9 @@ export default function RepoDetailPage() {
         (d) => d.pipelineStatus === 'PENDING'
     );
 
-    // 배포 내역: pipelineStatus가 "SUCCESS", "FAILED", "INPROGRESS"
+    // 배포 내역: pipelineStatus가 "SUCCESS", "FAILED", "IN_PROGRESS"
     const deploymentHistory = deployments.filter(
-        (d) => ['SUCCESS', 'FAILED', 'INPROGRESS'].includes(d.pipelineStatus)
+        (d) => ['SUCCESS', 'FAILED', 'IN_PROGRESS'].includes(d.pipelineStatus)
     );
 
     const handleDeploy = (deployment: DeploymentListItem) => {

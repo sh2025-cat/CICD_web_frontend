@@ -1,6 +1,6 @@
 export type CIStatus = 'SUCCESS' | 'FAILED' | 'RUNNING' | 'LOCKED';
-export type PipelineStatus = 'SUCCESS' | 'FAILED' | 'PENDING' | 'INPROGRESS';
-export type DeploymentStatus = 'PENDING' | 'INPROGRESS' | 'SUCCESS' | 'FAILED';
+export type PipelineStatus = 'SUCCESS' | 'FAILED' | 'PENDING' | 'IN_PROGRESS';
+export type DeploymentStatus = 'PENDING' | 'IN_PROGRESS' | 'SUCCESS' | 'FAILED';
 export type LastStep = 'test' | 'sast' | 'build' | 'infra' | 'deploy' | 'monitoring';
 export type StepName = 'test' | 'sast' | 'build' | 'infra' | 'deploy' | 'monitoring';
 
@@ -177,7 +177,7 @@ export const mockDeploymentList: Record<number, DeploymentListItem[]> = {
         {
             deploymentId: 104,
             lastStep: 'build',
-            pipelineStatus: 'INPROGRESS',
+            pipelineStatus: 'IN_PROGRESS',
             commit: {
                 message: 'Fix login bug',
                 shortHash: 'f9e8d7c',
@@ -335,7 +335,7 @@ export const mockDeploymentFlowData: Record<number, DeploymentFlowData> = {
     },
     104: {
         id: 104,
-        status: 'INPROGRESS',
+        status: 'IN_PROGRESS',
         githubRunId: '123456788',
         githubRunUrl: 'https://github.com/user/cicd_frontend/actions/runs/123456788',
         timings: {
