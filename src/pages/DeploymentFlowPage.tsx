@@ -52,7 +52,11 @@ export default function DeploymentFlowPage() {
                         ? (flowData.steps.find(s => s.name === 'deploy')?.status as CIStatus)
                         : 'LOCKED'
                 },
-                monitoring: { name: '모니터링', status: flowData.steps.find(s => s.name === 'monitoring')?.status as CIStatus || 'LOCKED' },
+                // 모니터링은 방문했으면 SUCCESS (항상 성공), 방문 안 했으면 LOCKED
+                monitoring: {
+                    name: '모니터링',
+                    status: flowData.steps.find(s => s.name === 'monitoring') ? 'SUCCESS' : 'LOCKED'
+                },
             },
         };
     };
@@ -103,6 +107,13 @@ export default function DeploymentFlowPage() {
 
         loadData();
     }, [numericId]);
+
+    // deploymentFlowData가 변경될 때마다 deployment를 자동으로 업데이트
+    useEffect(() => {
+        if (deploymentFlowData && isNumericId) {
+            setDeployment(convertToOldStructure(deploymentFlowData));
+        }
+    }, [deploymentFlowData, isNumericId]);
 
     useEffect(() => {
         if (deployment) {
@@ -284,18 +295,7 @@ export default function DeploymentFlowPage() {
 
                             return { ...prev, steps: updatedSteps };
                         });
-
-                        // deployment state도 업데이트
-                        setDeployment((prev) => {
-                            if (!prev) return prev;
-                            return {
-                                ...prev,
-                                stages: {
-                                    ...prev.stages,
-                                    [nextStageKey]: { ...prev.stages[nextStageKey], status: 'SUCCESS' },
-                                },
-                            };
-                        });
+                        // deployment는 useEffect에서 자동으로 업데이트됨
                     }
                 } else {
                     // 실제 API 모드: 서버에서 업데이트된 데이터 가져오기
@@ -572,18 +572,6 @@ export default function DeploymentFlowPage() {
                         const imageTag = deploymentFlowData.meta.imageTag;
                         const projectId = repo.id;
 
-                        // 1. 배포 상태를 RUNNING으로 변경
-                        setDeployment((prev) => {
-                            if (!prev) return prev;
-                            return {
-                                ...prev,
-                                stages: {
-                                    ...prev.stages,
-                                    deploy: { ...prev.stages.deploy, status: 'RUNNING' },
-                                },
-                            };
-                        });
-
                         // deploymentFlowData에 deploy step 추가/업데이트
                         setDeploymentFlowData((prev) => {
                             if (!prev) return prev;
@@ -616,19 +604,7 @@ export default function DeploymentFlowPage() {
                                 if (status === 'SUCCESS') {
                                     toast.success('배포가 성공적으로 완료되었습니다!');
 
-                                    // deployment state 업데이트
-                                    setDeployment((prev) => {
-                                        if (!prev) return prev;
-                                        return {
-                                            ...prev,
-                                            stages: {
-                                                ...prev.stages,
-                                                deploy: { ...prev.stages.deploy, status: 'SUCCESS' },
-                                            },
-                                        };
-                                    });
-
-                                    // deploymentFlowData 업데이트
+                                    // deploymentFlowData 업데이트 (deployment는 useEffect에서 자동 업데이트)
                                     setDeploymentFlowData((prev) => {
                                         if (!prev) return prev;
                                         const updatedSteps = [...prev.steps];
@@ -643,19 +619,7 @@ export default function DeploymentFlowPage() {
                                 } else {
                                     toast.error('배포가 실패했습니다.');
 
-                                    // deployment state 업데이트
-                                    setDeployment((prev) => {
-                                        if (!prev) return prev;
-                                        return {
-                                            ...prev,
-                                            stages: {
-                                                ...prev.stages,
-                                                deploy: { ...prev.stages.deploy, status: 'FAILED' },
-                                            },
-                                        };
-                                    });
-
-                                    // deploymentFlowData 업데이트
+                                    // deploymentFlowData 업데이트 (deployment는 useEffect에서 자동 업데이트)
                                     setDeploymentFlowData((prev) => {
                                         if (!prev) return prev;
                                         const updatedSteps = [...prev.steps];
@@ -673,15 +637,17 @@ export default function DeploymentFlowPage() {
                     } catch (error) {
                         console.error('배포 시작 실패:', error);
                         toast.error('배포 시작에 실패했습니다.');
-                        setDeployment((prev) => {
+                        // 배포 시작 실패 시에도 deploymentFlowData만 업데이트
+                        setDeploymentFlowData((prev) => {
                             if (!prev) return prev;
-                            return {
-                                ...prev,
-                                stages: {
-                                    ...prev.stages,
-                                    deploy: { ...prev.stages.deploy, status: 'LOCKED' },
-                                },
-                            };
+                            const updatedSteps = [...prev.steps];
+                            const deployStepIndex = updatedSteps.findIndex(s => s.name === 'deploy');
+
+                            if (deployStepIndex >= 0) {
+                                updatedSteps[deployStepIndex] = { ...updatedSteps[deployStepIndex], status: 'LOCKED' };
+                            }
+
+                            return { ...prev, steps: updatedSteps };
                         });
                     }
                 };
@@ -846,13 +812,8 @@ export default function DeploymentFlowPage() {
                             <div
                                 key={stage.key}
                                 className={`relative flex flex-col items-center flex-1 group ${
-                                    stage.status !== 'LOCKED' ? 'cursor-pointer' : 'cursor-not-allowed opacity-60'
+                                    stage.status === 'LOCKED' ? 'opacity-60' : ''
                                 }`}
-                                onClick={() => {
-                                    if (stage.status !== 'LOCKED') {
-                                        setSelectedStageKey(stage.key);
-                                    }
-                                }}
                             >
                                 <div
                                     className={`relative z-10 flex items-center justify-center w-12 h-12 rounded-full border-2 transition-all ${
