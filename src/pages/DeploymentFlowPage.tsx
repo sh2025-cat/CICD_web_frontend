@@ -67,40 +67,38 @@ export default function DeploymentFlowPage() {
     const [isRolledBack, setIsRolledBack] = useState(false);
     const [loading, setLoading] = useState(true);
 
-    // API로부터 배포 플로우 데이터 가져오기
+    // API로부터 배포 플로우 데이터와 리포지토리 정보 가져오기
     useEffect(() => {
-        if (isNumericId) {
+        const loadData = async () => {
             setLoading(true);
-            getDeploymentFlow(numericId)
-                .then((data) => {
+            try {
+                if (isNumericId) {
+                    // 배포 플로우 데이터 가져오기
+                    const data = await getDeploymentFlow(numericId);
                     setDeploymentFlowData(data);
-                    // deployment도 업데이트
                     setDeployment(convertToOldStructure(data));
 
                     // URL query parameter의 lastStep 사용, 없으면 steps 배열의 마지막 단계 사용
                     const lastStepParam = searchParams.get('lastStep');
                     if (lastStepParam) {
-                        // lastStep을 stageKey로 변환 (infra -> infrastructure)
                         const lastStageKey = lastStepParam === 'infra' ? 'infrastructure' : lastStepParam;
                         setSelectedStageKey(lastStageKey);
                     } else if (data.steps && data.steps.length > 0) {
-                        // query parameter 없으면 steps 배열의 마지막 단계 사용
                         const lastStep = data.steps[data.steps.length - 1];
                         const lastStageKey = lastStep.name === 'infra' ? 'infrastructure' : lastStep.name;
                         setSelectedStageKey(lastStageKey);
                     }
-                })
-                .catch((err) => {
-                    console.error('배포 플로우 로드 실패:', err);
-                    toast.error('배포 정보를 불러오는데 실패했습니다');
-                })
-                .finally(() => {
-                    setLoading(false);
-                });
-        } else {
-            setLoading(false);
-        }
-    }, [isNumericId, numericId]);
+                }
+            } catch (err) {
+                console.error('데이터 로드 실패:', err);
+                toast.error('데이터를 불러오는데 실패했습니다');
+            } finally {
+                setLoading(false);
+            }
+        };
+
+        loadData();
+    }, [numericId]);
 
     useEffect(() => {
         if (deployment) {

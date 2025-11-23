@@ -25,6 +25,7 @@ export default function RepoDetailPage() {
 
     useEffect(() => {
         const loadData = async () => {
+            setLoading(true);
             try {
                 // repo가 없으면 API로 가져오기
                 if (!repo) {
@@ -46,7 +47,7 @@ export default function RepoDetailPage() {
         };
 
         loadData();
-    }, [id, repo]);
+    }, [id]);
 
     if (loading) {
         return (
