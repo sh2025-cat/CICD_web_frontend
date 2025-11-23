@@ -40,7 +40,11 @@ export default function DeploymentFlowPage() {
                 test: { name: '테스트', status: flowData.steps.find(s => s.name === 'test')?.status as CIStatus || 'LOCKED' },
                 sast: { name: '보안 점검', status: flowData.steps.find(s => s.name === 'sast')?.status as CIStatus || 'LOCKED' },
                 build: { name: '빌드', status: flowData.steps.find(s => s.name === 'build')?.status as CIStatus || 'LOCKED' },
-                infrastructure: { name: '인프라 상태 확인', status: 'SUCCESS' }, // 인프라는 무조건 성공
+                // 인프라는 방문했으면 SUCCESS (항상 성공), 방문 안 했으면 LOCKED
+                infrastructure: {
+                    name: '인프라 상태 확인',
+                    status: flowData.steps.find(s => s.name === 'infra') ? 'SUCCESS' : 'LOCKED'
+                },
                 // 배포는 steps에 deploy가 없으면 LOCKED (대기), 있으면 실제 status
                 deploy: {
                     name: '배포',
