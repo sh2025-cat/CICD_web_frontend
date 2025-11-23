@@ -273,6 +273,26 @@ export default function DeploymentFlowPage() {
                 // infrastructure -> infra로 변환
                 const stepName = nextStageKey === 'infrastructure' ? 'infra' : nextStageKey;
 
+                // 인프라 단계로 넘어가는 경우, steps에 추가하지 않고 바로 이동
+                if (nextStageKey === 'infrastructure') {
+                    // deployment 객체의 infrastructure 상태를 SUCCESS로 수동 업데이트
+                    setDeployment((prev) => {
+                        if (!prev) return prev;
+                        return {
+                            ...prev,
+                            stages: {
+                                ...prev.stages,
+                                infrastructure: {
+                                    ...prev.stages.infrastructure,
+                                    status: 'SUCCESS',
+                                },
+                            },
+                        };
+                    });
+                    setSelectedStageKey(nextStageKey);
+                    return;
+                }
+
                 // API 호출: lastStep 업데이트
                 await updateDeploymentStep(numericId, stepName as any);
 
@@ -355,13 +375,27 @@ export default function DeploymentFlowPage() {
 
     const canProceed = () => {
         const currentIndex = stages.findIndex((s) => s.key === selectedStageKey);
+        console.log('🔍 canProceed 체크:', {
+            selectedStageKey,
+            currentIndex,
+            isLastStage: currentIndex === stages.length - 1,
+        });
+
         if (currentIndex === -1 || currentIndex === stages.length - 1) return false;
 
         // 인프라 단계는 무조건 다음 단계로 진행 가능
-        if (selectedStageKey === 'infrastructure') return true;
+        if (selectedStageKey === 'infrastructure') {
+            console.log('✅ 인프라 단계: 다음 단계 활성화 (return true)');
+            return true;
+        }
 
         const nextStage = stages[currentIndex + 1];
         const currentStage = stages[currentIndex];
+
+        console.log('📊 단계 상태:', {
+            currentStage: { key: currentStage.key, status: currentStage.status },
+            nextStage: { key: nextStage.key, status: nextStage.status },
+        });
 
         if (nextStage.status !== 'LOCKED') return true;
 
